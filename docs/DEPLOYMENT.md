@@ -136,6 +136,8 @@ Upload key: `eas credentials -p android` → download keystore → encrypted ZIP
 
 Create/download the upload keystore (interactive Expo menu, on your machine):
 
+Expo dashboard (same project): https://expo.dev/accounts/severaltool/projects/pkey/credentials
+
 ```bash
 eas credentials -p android
 ```
