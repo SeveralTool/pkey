@@ -58,3 +58,6 @@ playwright-report/
 # Large generated dumps
 structure.txt
 GENERATE_STRUCTURE.txt
+test_output.txt
+test_full_output.txt
+tsc_output.txt
