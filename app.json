@@ -1,0 +1,124 @@
+{
+  "expo": {
+    "name": "PKEY",
+    "slug": "pkey",
+    "version": "1.0.31",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "pkeysync",
+    "userInterfaceStyle": "automatic",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.severaltool.pkey",
+      "icon": "./assets/AppIcon.icon",
+      "infoPlist": {
+        "NSCameraUsageDescription": "Used to scan QR codes for device migration and pairing.",
+        "NSLocalNetworkUsageDescription": "Used to migrate your vault, sync with nearby devices, and provide stable browser access on your Wi-Fi network.",
+        "NSFaceIDUsageDescription": "PKEY uses Face ID to unlock your vault.",
+        "NSLocationWhenInUseUsageDescription": "PKEY uses location permission only to read your Wi-Fi network name (SSID) so you can confirm which network LAN web access uses. Location is not collected or sent anywhere.",
+        "NSBonjourServices": [
+          "_pkey-migrate._tcp",
+          "_pkey-web._tcp"
+        ]
+      }
+    },
+    "android": {
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "monochromeImage": "./assets/images/adaptive-icon-monochrome.png",
+        "backgroundColor": "#000000"
+      },
+      "package": "com.severaltool.pkey",
+      "versionCode": 31,
+      "softwareKeyboardLayoutMode": "resize",
+      "permissions": [
+        "POST_NOTIFICATIONS",
+        "CAMERA",
+        "INTERNET",
+        "ACCESS_NETWORK_STATE",
+        "ACCESS_WIFI_STATE",
+        "CHANGE_WIFI_MULTICAST_STATE",
+        "FOREGROUND_SERVICE",
+        "FOREGROUND_SERVICE_CONNECTED_DEVICE"
+      ]
+    },
+    "web": {
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/images/favicon.png"
+    },
+    "plugins": [
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "compileSdkVersion": 36,
+            "targetSdkVersion": 36,
+            "minSdkVersion": 24,
+            "usesCleartextTraffic": false,
+            "useLegacyPackaging": false,
+            "allowBackup": false
+          }
+        }
+      ],
+      "./plugins/with-network-security-config",
+      "./plugins/with-backup-rules",
+      [
+        "expo-splash-screen",
+        {
+          "image": "./assets/images/splash-icon.png",
+          "imageWidth": 200,
+          "resizeMode": "contain",
+          "backgroundColor": "#000000"
+        }
+      ],
+      "expo-secure-store",
+      "expo-web-browser",
+      "expo-font",
+      "expo-dev-client",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow PKEY to access your camera to scan QR codes for device pairing."
+        }
+      ],
+      [
+        "expo-location",
+        {
+          "locationWhenInUsePermission": "PKEY uses location permission only to read your Wi-Fi network name (SSID) so you can confirm which network LAN web access uses. Location is not collected or sent anywhere."
+        }
+      ],
+      "./plugins/with-wifi-ssid-permissions",
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/images/notification-icon.png",
+          "color": "#87cb28",
+          "defaultChannel": "pkey-actions"
+        }
+      ],
+      "expo-sharing",
+      "expo-status-bar",
+      "react-native-quick-crypto",
+      "expo-image",
+      [
+        "expo-file-system",
+        {
+          "enableFileSharing": true,
+          "supportsOpeningDocumentsInPlace": true
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "d63bdc8d-1197-42a0-a353-0f2c74dc7f75"
+      },
+      "buildIntegrity": {
+        "commit": "c84abe3848826580353175a977580930f7adeaf5",
+        "commitShort": "c84abe3",
+        "buildTimestamp": "2026-08-02T20:57:23.463Z"
+      }
+    },
+    "owner": "severaltool"
+  }
+}

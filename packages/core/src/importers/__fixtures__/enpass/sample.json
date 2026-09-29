@@ -1,0 +1,62 @@
+{
+  "items": [
+    {
+      "title": "Twitter",
+      "fields": [
+        {
+          "type": "username",
+          "value": "user@twitter.com"
+        },
+        {
+          "type": "password",
+          "value": "myTwitterPass123!"
+        },
+        {
+          "type": "url",
+          "value": "https://twitter.com"
+        },
+        {
+          "type": "totp",
+          "value": "JBSWY3DPEHPK3PXP"
+        }
+      ],
+      "note": "Main account"
+    },
+    {
+      "title": "Empty Pass Site",
+      "fields": [
+        {
+          "type": "username",
+          "value": "user@test.com"
+        },
+        {
+          "type": "password",
+          "value": ""
+        },
+        {
+          "type": "url",
+          "value": "https://test.com"
+        }
+      ],
+      "note": ""
+    },
+    {
+      "title": "Emoji 🔐 Site",
+      "fields": [
+        {
+          "type": "username",
+          "value": "emoji_user"
+        },
+        {
+          "type": "password",
+          "value": "secure99"
+        },
+        {
+          "type": "url",
+          "value": "https://emoji.example.com"
+        }
+      ],
+      "note": "Notes with emoji 🎉"
+    }
+  ]
+}

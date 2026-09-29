@@ -1,0 +1,14 @@
+{
+  "name": "pkey-vault-keys",
+  "version": "1.0.0",
+  "description": "PKEY hardware-bound unlock bundle (Android Keystore user-auth / iOS Keychain biometryCurrentSet)",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "PKEY",
+  "homepage": "https://github.com/severaltool/pkey",
+  "main": "index.ts",
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

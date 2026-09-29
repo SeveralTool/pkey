@@ -1,0 +1,646 @@
+diff --git a/node_modules/react-native-tcp-socket/android/build/.transforms/ac494883d3eff2803ca1b10b65402653/results.bin b/node_modules/react-native-tcp-socket/android/build/.transforms/ac494883d3eff2803ca1b10b65402653/results.bin
+new file mode 100644
+index 0000000..0d259dd
+--- /dev/null
++++ b/node_modules/react-native-tcp-socket/android/build/.transforms/ac494883d3eff2803ca1b10b65402653/results.bin
+@@ -0,0 +1 @@
++o/classes
+diff --git a/node_modules/react-native-tcp-socket/android/build/.transforms/ac494883d3eff2803ca1b10b65402653/transformed/classes/classes_dex/classes.dex b/node_modules/react-native-tcp-socket/android/build/.transforms/ac494883d3eff2803ca1b10b65402653/transformed/classes/classes_dex/classes.dex
+new file mode 100644
+index 0000000..2611153
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/.transforms/ac494883d3eff2803ca1b10b65402653/transformed/classes/classes_dex/classes.dex differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/.transforms/f4cacfbe26b18c7eaf338b0d55b6ae53/results.bin b/node_modules/react-native-tcp-socket/android/build/.transforms/f4cacfbe26b18c7eaf338b0d55b6ae53/results.bin
+new file mode 100644
+index 0000000..0d259dd
+--- /dev/null
++++ b/node_modules/react-native-tcp-socket/android/build/.transforms/f4cacfbe26b18c7eaf338b0d55b6ae53/results.bin
+@@ -0,0 +1 @@
++o/classes
+diff --git a/node_modules/react-native-tcp-socket/android/build/.transforms/f4cacfbe26b18c7eaf338b0d55b6ae53/transformed/classes/classes_dex/classes.dex b/node_modules/react-native-tcp-socket/android/build/.transforms/f4cacfbe26b18c7eaf338b0d55b6ae53/transformed/classes/classes_dex/classes.dex
+new file mode 100644
+index 0000000..2611153
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/.transforms/f4cacfbe26b18c7eaf338b0d55b6ae53/transformed/classes/classes_dex/classes.dex differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/generated/source/buildConfig/debug/com/asterinet/react/tcpsocket/BuildConfig.java b/node_modules/react-native-tcp-socket/android/build/generated/source/buildConfig/debug/com/asterinet/react/tcpsocket/BuildConfig.java
+new file mode 100644
+index 0000000..320a375
+--- /dev/null
++++ b/node_modules/react-native-tcp-socket/android/build/generated/source/buildConfig/debug/com/asterinet/react/tcpsocket/BuildConfig.java
+@@ -0,0 +1,10 @@
++/**
++ * Automatically generated file. DO NOT MODIFY
++ */
++package com.asterinet.react.tcpsocket;
++
++public final class BuildConfig {
++  public static final boolean DEBUG = Boolean.parseBoolean("true");
++  public static final String LIBRARY_PACKAGE_NAME = "com.asterinet.react.tcpsocket";
++  public static final String BUILD_TYPE = "debug";
++}
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml b/node_modules/react-native-tcp-socket/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml
+new file mode 100644
+index 0000000..e211b50
+--- /dev/null
++++ b/node_modules/react-native-tcp-socket/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/AndroidManifest.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="com.asterinet.react.tcpsocket" >
++
++    <uses-sdk android:minSdkVersion="24" />
++
++    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
++    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
++
++</manifest>
+\ No newline at end of file
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json b/node_modules/react-native-tcp-socket/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json
+new file mode 100644
+index 0000000..dd9976d
+--- /dev/null
++++ b/node_modules/react-native-tcp-socket/android/build/intermediates/aapt_friendly_merged_manifests/debug/processDebugManifest/aapt/output-metadata.json
+@@ -0,0 +1,18 @@
++{
++  "version": 3,
++  "artifactType": {
++    "type": "AAPT_FRIENDLY_MERGED_MANIFESTS",
++    "kind": "Directory"
++  },
++  "applicationId": "com.asterinet.react.tcpsocket",
++  "variantName": "debug",
++  "elements": [
++    {
++      "type": "SINGLE",
++      "filters": [],
++      "attributes": [],
++      "outputFile": "AndroidManifest.xml"
++    }
++  ],
++  "elementType": "File"
++}
+\ No newline at end of file
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/aar_main_jar/debug/syncDebugLibJars/classes.jar b/node_modules/react-native-tcp-socket/android/build/intermediates/aar_main_jar/debug/syncDebugLibJars/classes.jar
+new file mode 100644
+index 0000000..3f4d3df
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/aar_main_jar/debug/syncDebugLibJars/classes.jar differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties b/node_modules/react-native-tcp-socket/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties
+new file mode 100644
+index 0000000..1211b1e
+--- /dev/null
++++ b/node_modules/react-native-tcp-socket/android/build/intermediates/aar_metadata/debug/writeDebugAarMetadata/aar-metadata.properties
+@@ -0,0 +1,6 @@
++aarFormatVersion=1.0
++aarMetadataVersion=1.0
++minCompileSdk=1
++minCompileSdkExtension=0
++minAndroidGradlePluginVersion=1.0.0
++coreLibraryDesugaringEnabled=false
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json b/node_modules/react-native-tcp-socket/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json
+new file mode 100644
+index 0000000..9e26dfe
+--- /dev/null
++++ b/node_modules/react-native-tcp-socket/android/build/intermediates/annotation_processor_list/debug/javaPreCompileDebug/annotationProcessors.json
+@@ -0,0 +1 @@
++{}
+\ No newline at end of file
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/annotations_typedef_file/debug/extractDebugAnnotations/typedefs.txt b/node_modules/react-native-tcp-socket/android/build/intermediates/annotations_typedef_file/debug/extractDebugAnnotations/typedefs.txt
+new file mode 100644
+index 0000000..e69de29
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar b/node_modules/react-native-tcp-socket/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar
+new file mode 100644
+index 0000000..b4cf840
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/compile_library_classes_jar/debug/bundleLibCompileToJarDebug/classes.jar differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar b/node_modules/react-native-tcp-socket/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar
+new file mode 100644
+index 0000000..a60de2d
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/compile_r_class_jar/debug/generateDebugRFile/R.jar differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/compile_symbol_list/debug/generateDebugRFile/R.txt b/node_modules/react-native-tcp-socket/android/build/intermediates/compile_symbol_list/debug/generateDebugRFile/R.txt
+new file mode 100644
+index 0000000..e69de29
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/incremental/debug-mergeJavaRes/merge-state b/node_modules/react-native-tcp-socket/android/build/intermediates/incremental/debug-mergeJavaRes/merge-state
+new file mode 100644
+index 0000000..1c983fc
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/incremental/debug-mergeJavaRes/merge-state differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties b/node_modules/react-native-tcp-socket/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties
+new file mode 100644
+index 0000000..eb46cd8
+--- /dev/null
++++ b/node_modules/react-native-tcp-socket/android/build/intermediates/incremental/debug/packageDebugResources/compile-file-map.properties
+@@ -0,0 +1 @@
++#Mon Jul 27 19:57:05 UYT 2026
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml b/node_modules/react-native-tcp-socket/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml
+new file mode 100644
+index 0000000..b256e56
+--- /dev/null
++++ b/node_modules/react-native-tcp-socket/android/build/intermediates/incremental/debug/packageDebugResources/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="main" generated-set="main$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="debug$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\debug\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="debug" generated-set="debug$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\debug\res"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated$Generated" generated="true" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\proyects\pkey\node_modules\react-native-tcp-socket\android\build\generated\res\resValues\debug"/></dataSet><dataSet aapt-namespace="http://schemas.android.com/apk/res-auto" config="generated" generated-set="generated$Generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\proyects\pkey\node_modules\react-native-tcp-socket\android\build\generated\res\resValues\debug"/></dataSet><mergedItems/></merger>
+\ No newline at end of file
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/incremental/mergeDebugAssets/merger.xml b/node_modules/react-native-tcp-socket/android/build/intermediates/incremental/mergeDebugAssets/merger.xml
+new file mode 100644
+index 0000000..ec9029a
+--- /dev/null
++++ b/node_modules/react-native-tcp-socket/android/build/intermediates/incremental/mergeDebugAssets/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\assets"/></dataSet><dataSet config="debug" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\debug\assets"/></dataSet><dataSet config="generated" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\proyects\pkey\node_modules\react-native-tcp-socket\android\build\intermediates\shader_assets\debug\compileDebugShaders\out"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/incremental/mergeDebugJniLibFolders/merger.xml b/node_modules/react-native-tcp-socket/android/build/intermediates/incremental/mergeDebugJniLibFolders/merger.xml
+new file mode 100644
+index 0000000..dc6b9f2
+--- /dev/null
++++ b/node_modules/react-native-tcp-socket/android/build/intermediates/incremental/mergeDebugJniLibFolders/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\jniLibs"/></dataSet><dataSet config="debug" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\debug\jniLibs"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/incremental/mergeDebugShaders/merger.xml b/node_modules/react-native-tcp-socket/android/build/intermediates/incremental/mergeDebugShaders/merger.xml
+new file mode 100644
+index 0000000..6fdbc24
+--- /dev/null
++++ b/node_modules/react-native-tcp-socket/android/build/intermediates/incremental/mergeDebugShaders/merger.xml
+@@ -0,0 +1,2 @@
++<?xml version="1.0" encoding="utf-8"?>
++<merger version="3"><dataSet config="main" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\shaders"/></dataSet><dataSet config="debug" ignore_pattern="!.svn:!.git:!.ds_store:!*.scc:.*:&lt;dir>_*:!CVS:!thumbs.db:!picasa.ini:!*~"><source path="C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\debug\shaders"/></dataSet></merger>
+\ No newline at end of file
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/BuildConfig.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/BuildConfig.class
+new file mode 100644
+index 0000000..dddb4b0
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/BuildConfig.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/KeystoreInfo.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/KeystoreInfo.class
+new file mode 100644
+index 0000000..f504232
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/KeystoreInfo.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/ResolvableOption.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/ResolvableOption.class
+new file mode 100644
+index 0000000..236398b
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/ResolvableOption.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/SSLCertificateHelper$BlindTrustManager.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/SSLCertificateHelper$BlindTrustManager.class
+new file mode 100644
+index 0000000..b3ceff7
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/SSLCertificateHelper$BlindTrustManager.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/SSLCertificateHelper.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/SSLCertificateHelper.class
+new file mode 100644
+index 0000000..57de93c
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/SSLCertificateHelper.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpEventListener.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpEventListener.class
+new file mode 100644
+index 0000000..90f0789
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpEventListener.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocket.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocket.class
+new file mode 100644
+index 0000000..f34de88
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocket.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketClient$1.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketClient$1.class
+new file mode 100644
+index 0000000..e6b9c68
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketClient$1.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketClient$TcpReceiverTask.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketClient$TcpReceiverTask.class
+new file mode 100644
+index 0000000..d7bb6a9
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketClient$TcpReceiverTask.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketClient.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketClient.class
+new file mode 100644
+index 0000000..2e525f7
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketClient.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$1.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$1.class
+new file mode 100644
+index 0000000..2c0fae8
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$1.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$2.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$2.class
+new file mode 100644
+index 0000000..cbeebed
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$2.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$3.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$3.class
+new file mode 100644
+index 0000000..1663c0f
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$3.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$4.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$4.class
+new file mode 100644
+index 0000000..8f6ad87
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$4.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$5.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$5.class
+new file mode 100644
+index 0000000..315b512
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$5.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$6.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$6.class
+new file mode 100644
+index 0000000..3bf63bd
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$6.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$7.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$7.class
+new file mode 100644
+index 0000000..8ea03b6
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$7.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$CurrentNetwork.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$CurrentNetwork.class
+new file mode 100644
+index 0000000..1bfaeef
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule$CurrentNetwork.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule.class
+new file mode 100644
+index 0000000..6fbfed8
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketModule.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketPackage.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketPackage.class
+new file mode 100644
+index 0000000..214f1f9
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketPackage.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketServer$TcpListenTask.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketServer$TcpListenTask.class
+new file mode 100644
+index 0000000..8237432
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketServer$TcpListenTask.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketServer.class b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketServer.class
+new file mode 100644
+index 0000000..804b393
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/javac/debug/compileDebugJavaWithJavac/classes/com/asterinet/react/tcpsocket/TcpSocketServer.class differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt b/node_modules/react-native-tcp-socket/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt
+new file mode 100644
+index 0000000..78ac5b8
+--- /dev/null
++++ b/node_modules/react-native-tcp-socket/android/build/intermediates/local_only_symbol_list/debug/parseDebugLocalResources/R-def.txt
+@@ -0,0 +1,2 @@
++R_DEF: Internal format may change without notice
++local
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt b/node_modules/react-native-tcp-socket/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt
+new file mode 100644
+index 0000000..22f5649
+--- /dev/null
++++ b/node_modules/react-native-tcp-socket/android/build/intermediates/manifest_merge_blame_file/debug/processDebugManifest/manifest-merger-blame-debug-report.txt
+@@ -0,0 +1,14 @@
++1<?xml version="1.0" encoding="utf-8"?>
++2<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++3    package="com.asterinet.react.tcpsocket" >
++4
++5    <uses-sdk android:minSdkVersion="24" />
++6
++7    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
++7-->C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\AndroidManifest.xml:3:5-79
++7-->C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\AndroidManifest.xml:3:22-76
++8    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
++8-->C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\AndroidManifest.xml:4:5-79
++8-->C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\AndroidManifest.xml:4:22-76
++9
++10</manifest>
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/merged_java_res/debug/mergeDebugJavaResource/feature-react-native-tcp-socket.jar b/node_modules/react-native-tcp-socket/android/build/intermediates/merged_java_res/debug/mergeDebugJavaResource/feature-react-native-tcp-socket.jar
+new file mode 100644
+index 0000000..15cb0ec
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/merged_java_res/debug/mergeDebugJavaResource/feature-react-native-tcp-socket.jar differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml b/node_modules/react-native-tcp-socket/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml
+new file mode 100644
+index 0000000..e211b50
+--- /dev/null
++++ b/node_modules/react-native-tcp-socket/android/build/intermediates/merged_manifest/debug/processDebugManifest/AndroidManifest.xml
+@@ -0,0 +1,10 @@
++<?xml version="1.0" encoding="utf-8"?>
++<manifest xmlns:android="http://schemas.android.com/apk/res/android"
++    package="com.asterinet.react.tcpsocket" >
++
++    <uses-sdk android:minSdkVersion="24" />
++
++    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
++    <uses-permission android:name="android.permission.CHANGE_NETWORK_STATE" />
++
++</manifest>
+\ No newline at end of file
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json b/node_modules/react-native-tcp-socket/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json
+new file mode 100644
+index 0000000..0637a08
+--- /dev/null
++++ b/node_modules/react-native-tcp-socket/android/build/intermediates/navigation_json/debug/extractDeepLinksDebug/navigation.json
+@@ -0,0 +1 @@
++[]
+\ No newline at end of file
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt b/node_modules/react-native-tcp-socket/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt
+new file mode 100644
+index 0000000..08f4ebe
+--- /dev/null
++++ b/node_modules/react-native-tcp-socket/android/build/intermediates/nested_resources_validation_report/debug/generateDebugResources/nestedResourcesValidationReport.txt
+@@ -0,0 +1 @@
++0 Warning/Error
+\ No newline at end of file
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar b/node_modules/react-native-tcp-socket/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar
+new file mode 100644
+index 0000000..9c47157
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/intermediates/runtime_library_classes_jar/debug/bundleLibRuntimeToJarDebug/classes.jar differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt b/node_modules/react-native-tcp-socket/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt
+new file mode 100644
+index 0000000..e679dce
+--- /dev/null
++++ b/node_modules/react-native-tcp-socket/android/build/intermediates/symbol_list_with_package_name/debug/generateDebugRFile/package-aware-r.txt
+@@ -0,0 +1 @@
++com.asterinet.react.tcpsocket
+diff --git a/node_modules/react-native-tcp-socket/android/build/outputs/aar/react-native-tcp-socket-debug.aar b/node_modules/react-native-tcp-socket/android/build/outputs/aar/react-native-tcp-socket-debug.aar
+new file mode 100644
+index 0000000..086aad9
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/outputs/aar/react-native-tcp-socket-debug.aar differ
+diff --git a/node_modules/react-native-tcp-socket/android/build/outputs/logs/manifest-merger-debug-report.txt b/node_modules/react-native-tcp-socket/android/build/outputs/logs/manifest-merger-debug-report.txt
+new file mode 100644
+index 0000000..d81fb9c
+--- /dev/null
++++ b/node_modules/react-native-tcp-socket/android/build/outputs/logs/manifest-merger-debug-report.txt
+@@ -0,0 +1,25 @@
++-- Merging decision tree log ---
++manifest
++ADDED from C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\AndroidManifest.xml:1:1-5:12
++INJECTED from C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\AndroidManifest.xml:1:1-5:12
++	package
++		ADDED from C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\AndroidManifest.xml:2:11-50
++		INJECTED from C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\AndroidManifest.xml
++	xmlns:android
++		ADDED from C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\AndroidManifest.xml:1:11-69
++uses-permission#android.permission.ACCESS_NETWORK_STATE
++ADDED from C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\AndroidManifest.xml:3:5-79
++	android:name
++		ADDED from C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\AndroidManifest.xml:3:22-76
++uses-permission#android.permission.CHANGE_NETWORK_STATE
++ADDED from C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\AndroidManifest.xml:4:5-79
++	android:name
++		ADDED from C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\AndroidManifest.xml:4:22-76
++uses-sdk
++INJECTED from C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\AndroidManifest.xml reason: use-sdk injection requested
++INJECTED from C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\AndroidManifest.xml
++INJECTED from C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\AndroidManifest.xml
++	android:targetSdkVersion
++		INJECTED from C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\AndroidManifest.xml
++	android:minSdkVersion
++		INJECTED from C:\proyects\pkey\node_modules\react-native-tcp-socket\android\src\main\AndroidManifest.xml
+diff --git a/node_modules/react-native-tcp-socket/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin b/node_modules/react-native-tcp-socket/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin
+new file mode 100644
+index 0000000..4110656
+Binary files /dev/null and b/node_modules/react-native-tcp-socket/android/build/tmp/compileDebugJavaWithJavac/previous-compilation-data.bin differ
+diff --git a/node_modules/react-native-tcp-socket/android/src/main/java/com/asterinet/react/tcpsocket/TcpSocketModule.java b/node_modules/react-native-tcp-socket/android/src/main/java/com/asterinet/react/tcpsocket/TcpSocketModule.java
+index 121edb4..8454a44 100644
+--- a/node_modules/react-native-tcp-socket/android/src/main/java/com/asterinet/react/tcpsocket/TcpSocketModule.java
++++ b/node_modules/react-native-tcp-socket/android/src/main/java/com/asterinet/react/tcpsocket/TcpSocketModule.java
+@@ -20,6 +20,8 @@ import com.facebook.react.bridge.ReactContextBaseJavaModule;
+ import com.facebook.react.bridge.ReactMethod;
+ import com.facebook.react.bridge.ReadableMap;
+ import com.facebook.react.bridge.WritableMap;
++import com.facebook.react.bridge.WritableArray;
++import com.facebook.react.bridge.Arguments;
+ import com.facebook.react.bridge.Promise;
+ 
+ import java.io.IOException;
+@@ -45,11 +47,16 @@ public class TcpSocketModule extends ReactContextBaseJavaModule {
+     public static final String TAG = "TcpSockets";
+     private static final int N_THREADS = 2;
+     private final ReactApplicationContext mReactContext;
+-    private final ConcurrentHashMap<Integer, TcpSocket> socketMap = new ConcurrentHashMap<>();
++    /**
++     * Process-level map so listen sockets survive JS / ReactContext reload.
++     * Instance maps were wiped on reload while native ServerSockets kept the port
++     * (EADDRINUSE with an unreachable orphan).
++     */
++    private static final ConcurrentHashMap<Integer, TcpSocket> socketMap = new ConcurrentHashMap<>();
+     private final ConcurrentHashMap<Integer, ReadableMap> pendingTLS = new ConcurrentHashMap<>();
+     private final ConcurrentHashMap<String, Network> mNetworkMap = new ConcurrentHashMap<>();
+     private final CurrentNetwork currentNetwork = new CurrentNetwork();
+-    private final ExecutorService executorService = Executors.newFixedThreadPool(N_THREADS);
++    private static final ExecutorService executorService = Executors.newFixedThreadPool(N_THREADS);
+     private TcpEventListener tcpEvtListener;
+ 
+     public TcpSocketModule(ReactApplicationContext reactContext) {
+@@ -84,9 +91,23 @@ public class TcpSocketModule extends ReactContextBaseJavaModule {
+         executorService.execute(new Runnable() {
+             @Override
+             public void run() {
+-                if (socketMap.get(cId) != null) {
+-                    tcpEvtListener.onError(cId, new Exception("connect() called twice with the same id."));
+-                    return;
++                TcpSocket existing = socketMap.get(cId);
++                if (existing != null) {
++                    // Static socketMap + JS reload reuses ids while destroyed clients linger.
++                    // Reclaim stale clients; only fail if the id is still a live server.
++                    if (existing instanceof TcpSocketClient) {
++                        try {
++                            ((TcpSocketClient) existing).destroy();
++                        } catch (Exception e) {
++                            Log.w(TAG, "Failed destroying stale client id " + cId, e);
++                        }
++                        socketMap.remove(cId);
++                        pendingTLS.remove(cId);
++                        Log.w(TAG, "Reclaimed stale client socket id " + cId + " before reconnect");
++                    } else {
++                        tcpEvtListener.onError(cId, new Exception("connect() called twice with the same id."));
++                        return;
++                    }
+                 }
+                 try {
+                     // Get the network interface
+@@ -140,8 +161,18 @@ public class TcpSocketModule extends ReactContextBaseJavaModule {
+         executorService.execute(new Runnable() {
+             @Override
+             public void run() {
+-                TcpSocketClient socketClient = getTcpClient(cId);
+-                socketClient.destroy();
++                // Must remove from the static map — otherwise Metro/JS reload reuses the
++                // same cId and connect() fails with "called twice with the same id".
++                TcpSocket socket = socketMap.get(cId);
++                if (socket instanceof TcpSocketClient) {
++                    try {
++                        ((TcpSocketClient) socket).destroy();
++                    } catch (Exception e) {
++                        Log.w(TAG, "end/destroy failed for id " + cId, e);
++                    }
++                }
++                socketMap.remove(cId);
++                pendingTLS.remove(cId);
+             }
+         });
+     }
+@@ -158,13 +189,86 @@ public class TcpSocketModule extends ReactContextBaseJavaModule {
+         executorService.execute(new Runnable() {
+             @Override
+             public void run() {
+-                TcpSocketServer socketServer = getTcpServer(cId);
+-                socketServer.close();
++                // No-op if the id is already gone (JS reload / double-close).
++                // Throwing here crashes the app — the exception is on a worker thread.
++                TcpSocket socket = socketMap.get(cId);
++                if (!(socket instanceof TcpSocketServer)) {
++                    return;
++                }
++                ((TcpSocketServer) socket).close();
+                 socketMap.remove(cId);
+             }
+         });
+     }
+ 
++    /**
++     * Close every server socket currently bound to {@code port}.
++     * Used to reclaim a listen port after a JS reload leaves an orphan native server.
++     * Resolves with diagnostics so JS can await completion (close runs on a worker thread).
++     */
++    @SuppressWarnings("unused")
++    @ReactMethod
++    public void closeServersByPort(final Integer port, final Promise promise) {
++        executorService.execute(new Runnable() {
++            @Override
++            public void run() {
++                WritableMap result = Arguments.createMap();
++                WritableArray closedIds = Arguments.createArray();
++                WritableArray servers = Arguments.createArray();
++                int mapSize = socketMap.size();
++                int serverCount = 0;
++                int closedCount = 0;
++                try {
++                    if (port == null) {
++                        result.putInt("mapSize", mapSize);
++                        result.putInt("serverCount", 0);
++                        result.putInt("closedCount", 0);
++                        result.putArray("closedIds", closedIds);
++                        result.putArray("servers", servers);
++                        result.putString("error", "null port");
++                        promise.resolve(result);
++                        return;
++                    }
++                    for (Integer id : socketMap.keySet().toArray(new Integer[0])) {
++                        TcpSocket socket = socketMap.get(id);
++                        if (!(socket instanceof TcpSocketServer)) continue;
++                        serverCount++;
++                        TcpSocketServer server = (TcpSocketServer) socket;
++                        WritableMap info = Arguments.createMap();
++                        info.putInt("id", id);
++                        try {
++                            java.net.ServerSocket ss = server.getServerSocket();
++                            int localPort = ss != null ? ss.getLocalPort() : -1;
++                            boolean isClosed = ss == null || ss.isClosed();
++                            info.putInt("localPort", localPort);
++                            info.putBoolean("isClosed", isClosed);
++                            servers.pushMap(info);
++                            if (ss != null && !ss.isClosed() && localPort == port) {
++                                server.close();
++                                socketMap.remove(id);
++                                closedIds.pushInt(id);
++                                closedCount++;
++                            }
++                        } catch (Exception e) {
++                            info.putString("err", e.getMessage());
++                            servers.pushMap(info);
++                            Log.w(TAG, "closeServersByPort failed for id " + id, e);
++                        }
++                    }
++                    result.putInt("mapSize", mapSize);
++                    result.putInt("serverCount", serverCount);
++                    result.putInt("closedCount", closedCount);
++                    result.putArray("closedIds", closedIds);
++                    result.putArray("servers", servers);
++                    result.putInt("port", port);
++                    promise.resolve(result);
++                } catch (Exception e) {
++                    promise.reject("closeServersByPort", e);
++                }
++            }
++        });
++    }
++
+     @SuppressLint("StaticFieldLeak")
+     @SuppressWarnings("unused")
+     @ReactMethod
+diff --git a/node_modules/react-native-tcp-socket/android/src/main/java/com/asterinet/react/tcpsocket/TcpSocketServer.java b/node_modules/react-native-tcp-socket/android/src/main/java/com/asterinet/react/tcpsocket/TcpSocketServer.java
+index 2f13fdf..54427e9 100644
+--- a/node_modules/react-native-tcp-socket/android/src/main/java/com/asterinet/react/tcpsocket/TcpSocketServer.java
++++ b/node_modules/react-native-tcp-socket/android/src/main/java/com/asterinet/react/tcpsocket/TcpSocketServer.java
+@@ -6,6 +6,7 @@ import com.facebook.react.bridge.ReadableMap;
+ 
+ import java.io.IOException;
+ import java.net.InetAddress;
++import java.net.InetSocketAddress;
+ import java.net.ServerSocket;
+ import java.net.Socket;
+ import java.security.GeneralSecurityException;
+@@ -34,29 +35,30 @@ public final class TcpSocketServer extends TcpSocket {
+         clientSocketIds = (1 + getId()) * 1000;
+         // Get the addresses
+         InetAddress localInetAddress = InetAddress.getByName(address);
+-        // Create the socket
+-        // Check if TLS
++
++        boolean reuseAddress = true;
++        try {
++            reuseAddress = options.getBoolean("reuseAddress");
++        } catch (Exception e) {
++            reuseAddress = true;
++        }
++
++        // Create the socket — setReuseAddress MUST run before bind.
+         ReadableMap tlsOptions = options.getMap("tls");
+         if (tlsOptions != null) {
+             String keystoreResourceUri = tlsOptions.getString("keystore");
+             assert keystoreResourceUri != null;
+ 
+             SSLServerSocketFactory ssf = SSLCertificateHelper.createServerSocketFactory(context, keystoreResourceUri);
+-            serverSocket = ssf.createServerSocket(port, 50, localInetAddress);
++            serverSocket = ssf.createServerSocket();
++            serverSocket.setReuseAddress(reuseAddress);
++            serverSocket.bind(new InetSocketAddress(localInetAddress, port), 50);
+             isTLS = true;
+-            // ((SSLServerSocket) serverSocket).setNeedClientAuth(true);
+         } else {
+-            serverSocket = new ServerSocket(port, 50, localInetAddress);
+-            isTLS = false;
+-        }
+-
+-        // setReuseAddress
+-        try {
+-            boolean reuseAddress = options.getBoolean("reuseAddress");
++            serverSocket = new ServerSocket();
+             serverSocket.setReuseAddress(reuseAddress);
+-        } catch (Exception e) {
+-            // Default to true
+-            serverSocket.setReuseAddress(true);
++            serverSocket.bind(new InetSocketAddress(localInetAddress, port), 50);
++            isTLS = false;
+         }
+         mReceiverListener = receiverListener;
+         listen();
+diff --git a/node_modules/react-native-tcp-socket/src/Globals.js b/node_modules/react-native-tcp-socket/src/Globals.js
+index b12410b..14f21ab 100644
+--- a/node_modules/react-native-tcp-socket/src/Globals.js
++++ b/node_modules/react-native-tcp-socket/src/Globals.js
+@@ -1,7 +1,9 @@
+ import { NativeEventEmitter, NativeModules } from 'react-native';
+ const Sockets = NativeModules.TcpSockets;
+ 
+-let instanceNumber = 0;
++// Avoid colliding with orphan native sockets after Metro/JS reload (Android static map).
++// Low sequential ids (0,1,2…) are often still present from a previous JS runtime.
++let instanceNumber = Math.floor(Math.random() * 1e6) + 1e6;
+ 
+ function getNextId() {
+     return instanceNumber++;
+diff --git a/node_modules/react-native-tcp-socket/src/Server.js b/node_modules/react-native-tcp-socket/src/Server.js
+index a9884cc..6de1abc 100644
+--- a/node_modules/react-native-tcp-socket/src/Server.js
++++ b/node_modules/react-native-tcp-socket/src/Server.js
+@@ -108,6 +108,11 @@ export default class Server extends EventEmitter {
+                 host: options.host || '0.0.0.0',
+                 reuseAddress: options.reuseAddress,
+             };
++            // TLSServer.listen attaches `tls: { keystore }` — must reach native or TLS is a no-op.
++            if (options.tls) {
++                // @ts-ignore
++                listenOptions.tls = options.tls;
++            }
+             if (typeof callback_or_host === 'function') {
+                 cb = callback_or_host;
+             }
+diff --git a/node_modules/react-native-tcp-socket/src/TLSServer.js b/node_modules/react-native-tcp-socket/src/TLSServer.js
+index 64808a4..bc59bae 100644
+--- a/node_modules/react-native-tcp-socket/src/TLSServer.js
++++ b/node_modules/react-native-tcp-socket/src/TLSServer.js
+@@ -26,7 +26,15 @@ export default class TLSServer extends Server {
+     setSecureContext(options) {
+         /** @private */
+         this._options = { ...options };
+-        this._options.keystore = Image.resolveAssetSource(this._options.keystore).uri;
++        const ks = this._options.keystore;
++        // Bundled assets use numeric require(); runtime PKCS12 uses a file:// URI string.
++        if (typeof ks === 'number') {
++            this._options.keystore = Image.resolveAssetSource(ks).uri;
++        } else if (typeof ks === 'string') {
++            this._options.keystore = ks;
++        } else {
++            this._options.keystore = Image.resolveAssetSource(ks).uri;
++        }
+     }
+ 
+     /**

@@ -1,0 +1,55 @@
+﻿PKEY — Auditable Source Code License
+Copyright (c) 2026 SeveralTool. All rights reserved.
+
+OFFICIAL APPLICATION
+
+PKEY is developed and owned by SeveralTool. The official public source code
+repository is:
+
+    https://github.com/SeveralTool/pkey
+
+Only application builds distributed through channels authorized by SeveralTool
+(e.g. Apple App Store, Google Play) are official. Rebuilt or republished copies
+from this source are not official and are not supported.
+
+PURPOSE OF THIS REPOSITORY
+
+This repository is published for TRANSPARENCY and SECURITY AUDIT only.
+
+By accessing this repository, you agree to the following terms:
+
+1. WHAT YOU MAY DO
+
+   • READ and REVIEW the source code to verify it does not contain malicious
+     code, spyware, or backdoors.
+   • BUILD and RUN the software in a private, controlled environment solely to
+     perform that security audit.
+
+2. WHAT YOU MAY NOT DO
+
+   Unless SeveralTool gives you prior written permission, you may NOT:
+
+   a) Use the software as your own product or in production.
+   b) MODIFY the source code and redistribute, republish, or sublicense it
+      (including forks, mirrors, or store listings).
+   c) Distribute compiled binaries or APK/IPA builds derived from this source.
+   d) Present a modified or rebuilt copy as the official PKEY application.
+
+3. CONTRIBUTIONS
+
+   External code contributions (including unsolicited pull requests) are NOT
+   accepted. The official application is maintained solely by SeveralTool.
+
+   Security vulnerabilities must be reported privately as described in
+   docs/SECURITY.md. Responsible disclosure does not grant any right to
+   modify, redistribute, or claim authorship of the software.
+
+4. NO WARRANTY
+
+   THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+   IMPLIED.
+
+5. COPYRIGHT
+
+   Unauthorized copying, modification, or redistribution may violate
+   applicable copyright law.

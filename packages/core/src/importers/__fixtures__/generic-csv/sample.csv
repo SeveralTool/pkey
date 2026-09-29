@@ -1,0 +1,4 @@
+title,username,password,link,notes
+"Twitter","user@twitter.com","myTwitterPass123!","https://twitter.com","Main account"
+"Empty Pass Site","user@test.com","","https://test.com",""
+"Emoji 🔐 Site","emoji_user","secure99","https://emoji.example.com","Notes with emoji 🎉"

@@ -1,0 +1,9 @@
+{
+  "platforms": ["apple", "android"],
+  "apple": {
+    "modules": ["PkeyVaultKeysModule"]
+  },
+  "android": {
+    "modules": ["expo.modules.pkeyvaultkeys.PkeyVaultKeysModule"]
+  }
+}

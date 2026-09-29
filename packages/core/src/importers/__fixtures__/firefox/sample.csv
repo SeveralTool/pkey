@@ -1,0 +1,4 @@
+url,username,password
+"https://twitter.com","user@twitter.com","myTwitterPass123!"
+"https://test.com","user@test.com",""
+"https://emoji.example.com","emoji_user","secure99"

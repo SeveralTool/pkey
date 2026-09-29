@@ -1,0 +1,29 @@
+[
+  {
+    "name": "Twitter",
+    "username": "user@twitter.com",
+    "password": "myTwitterPass123!",
+    "url": "https://twitter.com",
+    "note": "Main account",
+    "otp": "JBSWY3DPEHPK3PXP",
+    "folder": "social"
+  },
+  {
+    "name": "Empty Pass Site",
+    "username": "user@test.com",
+    "password": "",
+    "url": "https://test.com",
+    "note": "",
+    "otp": "",
+    "folder": ""
+  },
+  {
+    "name": "Emoji 🔐 Site",
+    "username": "emoji_user",
+    "password": "secure99",
+    "url": "https://emoji.example.com",
+    "note": "Notes with emoji 🎉",
+    "otp": "",
+    "folder": "fun"
+  }
+]

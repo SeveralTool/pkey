@@ -1,0 +1,11 @@
+{
+  "name": "pkey-autofill",
+  "version": "1.0.0",
+  "license": "SEE LICENSE IN LICENSE",
+  "main": "index.ts",
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

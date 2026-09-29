@@ -1,0 +1,7 @@
+{
+  "name": "with-backup-rules",
+  "version": "1.0.0",
+  "main": "index.js",
+  "private": true,
+  "description": "allowBackup=false + dataExtractionRules excluding vault files"
+}

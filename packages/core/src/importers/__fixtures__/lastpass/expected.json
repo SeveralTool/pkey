@@ -1,0 +1,26 @@
+[
+  {
+    "title": "Twitter",
+    "username": "user@twitter.com",
+    "passwordList": ["myTwitterPass123!"],
+    "link": "https://twitter.com",
+    "notes": "Main account",
+    "tags": ["social"]
+  },
+  {
+    "title": "Empty Pass Site",
+    "username": "user@test.com",
+    "passwordList": [""],
+    "link": "https://test.com",
+    "notes": "",
+    "tags": []
+  },
+  {
+    "title": "Emoji 🔐 Site",
+    "username": "emoji_user",
+    "passwordList": ["secure99"],
+    "link": "https://emoji.example.com",
+    "notes": "Notes with emoji 🎉",
+    "tags": ["fun"]
+  }
+]

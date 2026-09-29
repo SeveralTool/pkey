@@ -1,0 +1,20 @@
+[
+  {
+    "title": "Twitter",
+    "username": "user@twitter.com",
+    "passwordList": ["myTwitterPass123!"],
+    "link": "https://twitter.com"
+  },
+  {
+    "title": "Empty Pass Site",
+    "username": "user@test.com",
+    "passwordList": [""],
+    "link": "https://test.com"
+  },
+  {
+    "title": "Emoji 🔐 Site",
+    "username": "emoji_user",
+    "passwordList": ["secure99"],
+    "link": "https://emoji.example.com"
+  }
+]

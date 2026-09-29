@@ -1,0 +1,14 @@
+{
+  "name": "pkey-crypto",
+  "version": "1.0.0",
+  "description": "PKEY native Argon2id + XChaCha20-Poly1305 and zeroizable root-key holder",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "PKEY",
+  "homepage": "https://github.com/severaltool/pkey",
+  "main": "index.ts",
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

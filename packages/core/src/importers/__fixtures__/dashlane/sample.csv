@@ -1,0 +1,4 @@
+username,username1,username2,title,url,password,note,otpSecret
+"user@twitter.com","user@twitter.com","","Twitter","https://twitter.com","myTwitterPass123!","Main account","JBSWY3DPEHPK3PXP"
+"user@test.com","user@test.com","","Empty Pass Site","https://test.com","","",""
+"emoji_user","emoji_user","","Emoji 🔐 Site","https://emoji.example.com","secure99","Notes with emoji 🎉",""

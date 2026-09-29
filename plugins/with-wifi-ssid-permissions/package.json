@@ -1,0 +1,7 @@
+{
+  "name": "with-wifi-ssid-permissions",
+  "version": "1.0.0",
+  "main": "index.js",
+  "private": true,
+  "description": "Android 13+ NEARBY_WIFI_DEVICES for SSID; location maxSdk 32"
+}

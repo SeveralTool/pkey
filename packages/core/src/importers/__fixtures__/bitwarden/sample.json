@@ -1,0 +1,46 @@
+{
+  "items": [
+    {
+      "name": "Twitter",
+      "login": {
+        "username": "user@twitter.com",
+        "password": "myTwitterPass123!",
+        "uris": [
+          {
+            "uri": "https://twitter.com"
+          }
+        ],
+        "totp": "otpauth://totp/Twitter:user@twitter.com?secret=JBSWY3DPEHPK3PXP&issuer=Twitter&algorithm=SHA1&digits=6&period=30"
+      },
+      "notes": "Main account"
+    },
+    {
+      "name": "Empty Pass Site",
+      "login": {
+        "username": "user@test.com",
+        "password": "",
+        "uris": [
+          {
+            "uri": "https://test.com"
+          }
+        ],
+        "totp": ""
+      },
+      "notes": ""
+    },
+    {
+      "name": "Emoji 🔐 Site",
+      "login": {
+        "username": "emoji_user",
+        "password": "secure99",
+        "uris": [
+          {
+            "uri": "https://emoji.example.com"
+          }
+        ],
+        "totp": ""
+      },
+      "notes": "Notes with emoji 🎉"
+    }
+  ]
+}

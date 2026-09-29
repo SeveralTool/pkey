@@ -1,0 +1,14 @@
+{
+  "name": "pkey-web-access",
+  "version": "1.0.0",
+  "description": "PKEY native helpers for LAN web access (Android foreground service + iOS background task)",
+  "license": "SEE LICENSE IN LICENSE",
+  "author": "PKEY",
+  "homepage": "https://github.com/severaltool/pkey",
+  "main": "index.ts",
+  "peerDependencies": {
+    "expo": "*",
+    "react": "*",
+    "react-native": "*"
+  }
+}

@@ -1,0 +1,42 @@
+{
+  "sha1SecretBase32": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQ",
+  "sha256SecretBase32": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZA",
+  "sha512SecretBase32": "GEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNBVGY3TQOJQGEZDGNA",
+  "hotpSha1_6": [
+    { "counter": 0, "code": "755224" },
+    { "counter": 1, "code": "287082" },
+    { "counter": 2, "code": "359152" },
+    { "counter": 3, "code": "969429" },
+    { "counter": 4, "code": "338314" },
+    { "counter": 5, "code": "254676" },
+    { "counter": 6, "code": "287922" },
+    { "counter": 7, "code": "162583" },
+    { "counter": 8, "code": "399871" },
+    { "counter": 9, "code": "520489" },
+    { "counter": 59, "code": "24083773", "digits": 8 }
+  ],
+  "totpSha1_8": [
+    { "timeSeconds": 59, "code": "94287082" },
+    { "timeSeconds": 1111111109, "code": "07081804" },
+    { "timeSeconds": 1111111111, "code": "14050471" },
+    { "timeSeconds": 1234567890, "code": "89005924" },
+    { "timeSeconds": 2000000000, "code": "69279037" },
+    { "timeSeconds": 20000000000, "code": "65353130" }
+  ],
+  "totpSha256_8": [
+    { "timeSeconds": 59, "code": "46119246" },
+    { "timeSeconds": 1111111109, "code": "68084774" },
+    { "timeSeconds": 1111111111, "code": "67062674" },
+    { "timeSeconds": 1234567890, "code": "91819424" },
+    { "timeSeconds": 2000000000, "code": "90698825" },
+    { "timeSeconds": 20000000000, "code": "77737706" }
+  ],
+  "totpSha512_8": [
+    { "timeSeconds": 59, "code": "90693936" },
+    { "timeSeconds": 1111111109, "code": "25091201" },
+    { "timeSeconds": 1111111111, "code": "99943326" },
+    { "timeSeconds": 1234567890, "code": "93441116" },
+    { "timeSeconds": 2000000000, "code": "38618901" },
+    { "timeSeconds": 20000000000, "code": "47863826" }
+  ]
+}

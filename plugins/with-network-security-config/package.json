@@ -1,0 +1,7 @@
+{
+  "name": "with-network-security-config",
+  "version": "1.0.0",
+  "main": "index.js",
+  "private": true,
+  "description": "Local Expo config plugin — restricts cleartext HTTP to LAN ranges only (audit C6)"
+}
