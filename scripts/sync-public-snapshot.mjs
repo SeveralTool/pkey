@@ -65,7 +65,9 @@ function shouldSkip(srcPath) {
   ) {
     return true;
   }
-  if (name.startsWith('.env.') && name !== '.env.example') return true;
+  if (name === 'test_output.txt' || name === 'test_full_output.txt' || name === 'tsc_output.txt') {
+    return true;
+  }
   if (
     rel.startsWith('modules/') &&
     (rel.includes('/android/build') || rel.includes('/android/.gradle'))
