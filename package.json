@@ -6,6 +6,7 @@
   "engines": {
     "node": ">=20.3.0 <=22.x"
   },
+  "packageManager": "npm@11.11.0",
   "workspaces": [
     "packages/*"
   ],
@@ -43,7 +44,7 @@
     "sync:public": "node scripts/sync-public-snapshot.mjs",
     "bootstrap:public-github": "node scripts/bootstrap-public-github.mjs",
     "generate:brand-icons": "node scripts/generate-brand-icons.mjs",
-    "check:core-purity": "node -e \"const{execSync}=require('child_process');try{execSync('grep -rE react-native|expo- packages/core/src',{stdio:'pipe'});process.exit(1)}catch{process.exit(0)}\""
+    "check:core-purity": "node scripts/check-core-purity.mjs"
   },
   "dependencies": {
     "@expo/vector-icons": "^15.0.3",

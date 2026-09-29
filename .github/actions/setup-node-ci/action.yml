@@ -1,0 +1,19 @@
+name: Setup Node and npm ci
+description: Node 22 plus npm 11, then npm ci so the lockfile matches CI.
+
+runs:
+  using: composite
+  steps:
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: npm
+        cache-dependency-path: package-lock.json
+    - name: Activate npm 11
+      shell: bash
+      run: |
+        npm install -g npm@11.11.0
+        npm --version
+    - name: npm ci
+      shell: bash
+      run: npm ci

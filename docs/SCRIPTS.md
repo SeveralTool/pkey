@@ -14,7 +14,7 @@ Node/TypeScript utilities that support the monorepo build pipeline and quality c
 | `ensure-android-sdk.mjs` | Called by `build-apk.mjs` | Write `android/local.properties` `sdk.dir` |
 | `generate-import-fixtures.ts` | `npm run generate:import-fixtures` | Regenerate importer `sample.*` + `expected.json` |
 | `validate-otp.ts` | `npm run validate:otp` | Cross-check `@pkey/core` TOTP vs `otplib` |
-| `validate-docs.mjs` | `npm run docs:validate` | Render every ` ```mermaid ` block in `*.md` and enforce docs policy (no mermaid in in-app help procedures) |
+| `check-core-purity.mjs` | `npm run check:core-purity` | Fail if `@pkey/core` source imports `react-native` or `expo-*` (comments ignored) |
 | `generate-third-party-notices.mjs` | `npm run legal:notices` | Third-party license report for legal notices |
 | `build-legal-site.mjs` | `npm run legal:site` | Static HTML in `legal-site/` for GitHub Pages |
 | `sync-public-snapshot.mjs` | `npm run sync:public -- <dir>` | Copy a clean tree (no history, no `archive/`) to the public clone |
