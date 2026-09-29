@@ -9,7 +9,7 @@ PKEY is a local-first Expo React Native password manager with a shared `@pkey/co
 ```text
 docs/
 ├── README.md                         This index
-├── GETTING_STARTED.md                Clone / audit run / public vs private repos
+├── GETTING_STARTED.md                Audit clone / local run (not production)
 ├── DEPLOYMENT.md                     Android / iOS / PWA / EAS / SHA-256
 ├── DEPLOY_CHECKLIST.md               Google Play launch tracker (living checklist)
 ├── store/PLAY_LISTING.md             Play Store listing copy + screenshot recipe
@@ -42,8 +42,8 @@ Root [`archive/`](../archive/) holds historical design notes (not active product
 
 | Document | Topic |
 |----------|-------|
-| [GETTING_STARTED.md](./GETTING_STARTED.md) | Clone, install, audit run, public vs private repos |
-| [../README.md](../README.md) | Prerequisites, install, first run |
+| [GETTING_STARTED.md](./GETTING_STARTED.md) | Audit clone / local run (not a product install) |
+| [../README.md](../README.md) | Product overview, official app, license |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Technical architecture |
 | [DEPLOYMENT.md](./DEPLOYMENT.md) | Builds, EAS, APK/AAB, verification hashes |
 | [DEPLOY_CHECKLIST.md](./DEPLOY_CHECKLIST.md) | Google Play launch tracker — mark items as they close |

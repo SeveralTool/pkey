@@ -109,7 +109,7 @@ flowchart LR
   eas --> rel
 ```
 
-Maintainer recipe:
+Maintainer recipe (or attach [dev_procedure/SYNC_PUBLIC.md](./dev_procedure/SYNC_PUBLIC.md) for an agent to run it):
 
 ```bash
 # 1. Copy this working tree into a separate clone of SeveralTool/pkey
@@ -216,6 +216,6 @@ Play Store launch work (listing, Data safety, legal URLs, staged rollout) lives 
 ## Related
 
 - [DEPLOY_CHECKLIST.md](./DEPLOY_CHECKLIST.md) — Google Play publication checklist
-- [GETTING_STARTED.md](./GETTING_STARTED.md)
+- [GETTING_STARTED.md](./GETTING_STARTED.md) — audit clone / local run (not production)
 - [SECURITY.md](./SECURITY.md) — vulnerability reporting and audit posture
 - [PERFORMANCE.md](./PERFORMANCE.md) — release profiling notes

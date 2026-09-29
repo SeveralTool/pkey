@@ -1,6 +1,8 @@
-# Getting started
+# Audit setup
 
-PKEY is **source-available** for security audit. The official app is the store build. Do **not** use a self-built copy in production or republish it. See [LICENSE](../LICENSE) and [CONTRIBUTING.md](./CONTRIBUTING.md).
+End users should install PKEY from the official store listing. **This page is not a product install guide.**
+
+PKEY is **source-available** for security audit. The official app is the store build. You may clone and run the source in a private environment **only** to review it. Do **not** use a self-built copy in production or republish it. See [LICENSE](../LICENSE) and [CONTRIBUTING.md](./CONTRIBUTING.md).
 
 ## Prerequisites
 
@@ -13,7 +15,7 @@ PKEY is **source-available** for security audit. The official app is the store b
 
 Optional: `ANDROID_HOME` / `ANDROID_SDK_ROOT` for a local debug APK. Copy [`.env.example`](../.env.example) if you need those paths. No cloud API keys exist.
 
-## Install
+## Clone for audit
 
 ```bash
 git clone https://github.com/SeveralTool/pkey.git
@@ -54,13 +56,7 @@ npm run test:web
 | `SeveralTool/pkey-dev` | Private | Day-to-day history, WIP |
 | `SeveralTool/pkey` | Public | Canonical audit source. Same URLs as [legalContact.ts](../src/constants/legalContact.ts) |
 
-Public history is a **clean snapshot** (no `pkey-dev` commits). Releases:
-
-1. `npm run sync:public -- <path-to-public-clone>`
-2. Commit on the **public** clone
-3. `npm run stamp:integrity` on that public `HEAD` (so Settings matches GitHub)
-4. `eas build --profile production --platform android` (run locally; not from the coding agent)
-5. Publish SHA-256 on the public GitHub Release — [DEPLOYMENT.md](./DEPLOYMENT.md)
+Public history is a **clean snapshot** (no `pkey-dev` commits). Ask an agent to run [dev_procedure/SYNC_PUBLIC.md](./dev_procedure/SYNC_PUBLIC.md). Manual recipe: [DEPLOYMENT.md](./DEPLOYMENT.md#public-snapshot-and-store-aab).
 
 ## Next
 

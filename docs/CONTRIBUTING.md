@@ -22,7 +22,7 @@ Responsible disclosure does **not** grant any right to modify, redistribute, or 
 
 If you clone the repo to audit it:
 
-1. Follow [GETTING_STARTED.md](./GETTING_STARTED.md) for prerequisites and install.
+1. Follow [GETTING_STARTED.md](./GETTING_STARTED.md) for audit-only clone, tests, and local run.
 2. Read [ARCHITECTURE.md](./ARCHITECTURE.md) for monorepo layout, data flow, and encryption.
 3. See [DEPLOYMENT.md](./DEPLOYMENT.md) for build and verification notes.
 

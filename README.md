@@ -22,55 +22,14 @@
 - **Import** — Bitwarden, 1Password, Dashlane, NordPass, Keeper, Chrome, Firefox, LastPass, Enpass, generic CSV
 - **LAN web access** — HTTP browser vault served from the phone (Solid.js; trusted Wi‑Fi; E2E sync)
 - **Device migration** — encrypted peer-to-peer transfer with pairing
-- **Monorepo** — shared `@pkey/core`, Expo mobile app, embedded web client
 
-## Prerequisites
+## Official app
 
-| Tool | Version |
-|------|---------|
-| Node.js | **22** (LTS; matches CI) |
-| npm | 10+ (workspaces) |
-| Expo / Android Studio | For device or emulator builds |
-| Git | Latest |
+Install PKEY from **SeveralTool-authorized channels** (Google Play, Apple App Store). That is the only supported way to use the product.
 
-Optional: `ANDROID_HOME` / `ANDROID_SDK_ROOT` for APK builds (see [`.env.example`](.env.example)).
+This repository is **source-available for security audit and transparency**. It is **not** an open-source project: you may not use a self-built copy in production, redistribute it, or send code contributions. See [LICENSE](LICENSE) and [docs/CONTRIBUTING.md](docs/CONTRIBUTING.md).
 
-## Installation
-
-```bash
-git clone https://github.com/SeveralTool/pkey.git
-cd pkey
-npm ci
-```
-
-> Packages are marked `"private": true` — they are **not** published to npm. The source is published for **security audit only**; see [LICENSE](LICENSE).
-
-### Development (Expo)
-
-```bash
-# Rebuild shared packages + embed PWA into the mobile app
-npm run prebuild:mobile
-
-# Start Expo (dev client)
-npm start
-```
-
-Then press `a` for Android, or scan the QR code with a development build.
-
-### Web client (standalone)
-
-```bash
-npm run build:core
-npm run dev:web
-```
-
-### Debug APK
-
-```bash
-# Requires Android SDK
-npm run build:apk
-# Output: builds/android/pkey-debug.apk
-```
+To **read, review, or run the source locally for audit only**, follow **[docs/GETTING_STARTED.md](docs/GETTING_STARTED.md)**.
 
 ## Basic usage
 
@@ -79,16 +38,6 @@ npm run build:apk
 3. Optionally enable biometrics and auto-lock in **Settings**.
 4. Enable **Web access** to open the vault from a browser on the same Wi-Fi.
 5. Export a local backup before wiping or migrating devices.
-
-## Advanced usage
-
-| Workflow | Docs / commands |
-|----------|-----------------|
-| Import third-party exports | [docs/CORE_PACKAGE.md](docs/CORE_PACKAGE.md#importers) |
-| Embed PWA into mobile | `npm run embed:pwa` — [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) |
-| Core purity (no RN in `@pkey/core`) | `npm run check:core-purity` |
-| OTP validation vs otplib | `npm run validate:otp` |
-| Architecture & security notes | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) · [docs/README.md](docs/README.md) |
 
 ## Project structure
 
@@ -99,33 +48,19 @@ pkey/
 ├── packages/
 │   ├── core/               # @pkey/core — crypto, vault, sync, importers
 │   └── web-client/         # Solid + Vite PWA
-├── modules/
-│   └── pkey-web-access/    # Android foreground service Expo module
-├── scripts/                # APK, embed PWA, fixtures, OTP checks
+├── modules/                # Native Expo modules (crypto, autofill, web access)
+├── scripts/                # Embed PWA, fixtures, legal site, OTP checks
 ├── docs/                   # Active documentation (+ legal/)
 ├── archive/                # Obsolete engineering notes
 ├── assets/                 # Icons, splash, brand
 └── .github/workflows/      # CI
 ```
 
-Docs: [Getting started](docs/GETTING_STARTED.md) · [Architecture](docs/ARCHITECTURE.md) · [Deployment](docs/DEPLOYMENT.md) · [Index](docs/README.md)
-
-## Scripts
-
-| Script | Description |
-|--------|-------------|
-| `npm start` | Expo dev client |
-| `npm run lint` | ESLint (expo) |
-| `npm run format` / `format:check` | Prettier |
-| `npm test` | Jest (mobile) |
-| `npm run test:core` | Vitest (`@pkey/core`) |
-| `npm run test:web` | Vitest (web-client) |
-| `npm run test:e2e` | Playwright smoke |
-| `npm run prebuild:mobile` | build core + web + embed PWA |
-| `npm run build:apk` | Debug APK |
-| `npm run legal:notices` | Generate third-party license report |
-| `npm run legal:site` | Build GitHub Pages HTML from `docs/legal/` |
-| `npm run sync:public` | Copy a clean tree into the public clone (no history) |
+| Audience | Docs |
+|----------|------|
+| Auditors (clone, tests, local run) | [GETTING_STARTED.md](docs/GETTING_STARTED.md) |
+| Architecture & encryption | [ARCHITECTURE.md](docs/ARCHITECTURE.md) |
+| Full index | [docs/README.md](docs/README.md) |
 
 ## Project policy
 
