@@ -55,7 +55,7 @@ if (current.name === 'pkey') {
   process.exit(1);
 }
 
-if (!tryGh(['repo', 'view', 'SeveralTool/pkey', '--json', 'name'])) {
+if (!tryGh(['api', 'repos/SeveralTool/pkey', '--jq', '.name']) || gh(['api', 'repos/SeveralTool/pkey', '--jq', '.name']) === 'pkey-dev') {
   console.log('Creating public SeveralTool/pkey…');
   gh([
     'repo',

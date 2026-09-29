@@ -88,7 +88,7 @@ No hay carpeta `android/` versionada. El manifiesto final lo genera prebuild/EAS
 - [x] **HECHO** — Versión alineada: Expo `1.0.31` / `versionCode` 31 / `package.json` `1.0.31`; EAS `appVersionSource: local`
 - [x] **HECHO** — Perfil EAS `production` = AAB (no subir el APK de `preview` a producción)
 - [x] **HECHO** — Subida a Play: **manual** del AAB (`submit.production` vacío a propósito; no commitear JSON de cuenta de servicio)
-- [ ] **PARCIAL** — Play App Signing activado en Console; backup de upload key
+- [x] **PARCIAL** — Play App Signing: EAS ya tiene upload keystore `xfmJ0QpOWj`. Falta **descargar backup** (`eas credentials -p android`) y activar Play App Signing en la primera subida.
 - [ ] **FALTA** — `npm run stamp:integrity` en el commit que se envía a EAS (el sello actual del repo no es de tienda)
 - [x] **HECHO** — `targetSdk` / `compileSdk` **36** pineados; módulos nativos fallback 36; `useLegacyPackaging: false`
 - [ ] **PARCIAL** — Script `npm run check:16kb -- file.aab` listo; falta correrlo sobre el AAB de producción y confirmar en Play Console
@@ -117,7 +117,7 @@ Candidatos nativos a revisar si falla 16 KB: `react-native-tcp-socket`, `react-n
 - [ ] **N/A** — Vídeo promocional (opcional). Si se hace: sin “100% local” ni “irrompible”
 - [x] **HECHO** — Título, corta, larga, categoría y tags redactados en [store/PLAY_LISTING.md](./store/PLAY_LISTING.md) (falta **pegarlos** en Console)
 - [x] **HECHO** — Nombre visible `PKEY` en `app.json` y copy de cámara
-- [ ] **FALTA** — URL pública HTTPS de privacidad y términos: https://severaltool.github.io/pkey/ (Pages se activa al publicar el repo; pegar en Console)
+- [x] **HECHO** — URL pública HTTPS: https://severaltool.github.io/pkey/ (Pages activo). Pegar privacidad/términos en Console.
 - [ ] **FALTA** — Email de soporte en la ficha (campo de Console; no va en el código)
 
 La app tiene `allowScreenshots: false` por defecto. Para capturas de tienda hace falta un build temporal que las permita. **Nunca** mostrar datos reales de una bóveda.
@@ -265,7 +265,7 @@ Capturas de adquisición: login, lista, generador, LAN, autofill Android — dat
 
 No enviar mientras alguno de estos esté `FALTA`:
 
-- [ ] 1. Hospedar política y términos **finales** en HTTPS público — URLs: [store/PLAY_LISTING.md](./store/PLAY_LISTING.md) (activar GitHub Pages en el repo público)
+- [x] 1. Hospedar política y términos en HTTPS — https://severaltool.github.io/pkey/privacy.html — **falta pegar la URL en Play Console**
 - [ ] 2. Pegar Data safety en Console (texto en [legal/PLAY_CONSOLE.md](./legal/PLAY_CONSOLE.md); HIBP + favicons opt-in)
 - [ ] 3. Content rating + audiencia 18+ en Console (respuestas en el playbook; **sin** Restrict Minor Access; **sin** checkbox 18+ in-app)
 - [ ] 4. Capturas reales de teléfono
