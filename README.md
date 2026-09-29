@@ -9,10 +9,8 @@
 **PKEY** is a **local-first password manager**: your vault is encrypted on device, never uploaded to a vendor cloud. Unlock with a master password (and optional biometrics), manage cards with OTP/TOTP, import from popular managers, open the vault in a browser on your LAN (`http://…:7392`), and migrate vaults between phones over TLS.
 
 <p align="center">
-  <img src="assets/logo/PKEY.png" alt="PKEY logo" width="160" />
+  <img src="assets/images/brand-logo.png" alt="PKEY logo" width="160" />
 </p>
-
-> Demo / screenshots: see [`assets/logo/`](assets/logo/) for brand art. Replace this section with device screenshots or a GIF when available.
 
 ## Features
 
@@ -50,9 +48,8 @@ pkey/
 │   └── web-client/         # Solid + Vite PWA
 ├── modules/                # Native Expo modules (crypto, autofill, web access)
 ├── scripts/                # Embed PWA, fixtures, legal site, OTP checks
-├── docs/                   # Active documentation (+ legal/)
-├── archive/                # Obsolete engineering notes
-├── assets/                 # Icons, splash, brand
+├── docs/                   # Auditor docs (+ legal/)
+├── assets/                 # App icons, splash, brand
 └── .github/workflows/      # CI
 ```
 

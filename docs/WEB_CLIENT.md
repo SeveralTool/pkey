@@ -152,6 +152,5 @@ npm run test:e2e
 ## Related
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md)
-- [DEPLOYMENT.md](./DEPLOYMENT.md)
 - [CORE_PACKAGE.md](./CORE_PACKAGE.md)
 - Stub: [`packages/web-client/README.md`](../packages/web-client/README.md)

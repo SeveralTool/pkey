@@ -24,15 +24,12 @@ If you clone the repo to audit it:
 
 1. Follow [GETTING_STARTED.md](./GETTING_STARTED.md) for audit-only clone, tests, and local run.
 2. Read [ARCHITECTURE.md](./ARCHITECTURE.md) for monorepo layout, data flow, and encryption.
-3. See [DEPLOYMENT.md](./DEPLOYMENT.md) for build and verification notes.
 
 Do **not** commit secrets, `.env` files, signing keys, or vault backups to any fork or mirror you create for private review.
 
 ## Public vs private GitHub (maintainers)
 
-Day-to-day work lives in the private **`SeveralTool/pkey-dev`** history. The canonical audit repo is **`SeveralTool/pkey`** (clean snapshots, no WIP commits). URLs in the app stay `https://github.com/SeveralTool/pkey`.
-
-To publish a snapshot: `npm run sync:public -- <public-clone-path>`, commit there, then stamp and build as in [DEPLOYMENT.md](./DEPLOYMENT.md#public-snapshot-and-store-aab).
+Day-to-day work lives in the private **`SeveralTool/pkey-dev`** history. The canonical audit repo is **`SeveralTool/pkey`** (filtered snapshots, no WIP commits). URLs in the app stay `https://github.com/SeveralTool/pkey`. Store, EAS, and snapshot recipes stay in the private tree.
 
 ## Pull requests and issues
 

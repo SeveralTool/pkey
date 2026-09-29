@@ -9,7 +9,7 @@ Node/TypeScript utilities that support the monorepo build pipeline and quality c
 | `embed-pwa.mjs` | `npm run embed:pwa` | Embed Vite single-file HTML into `src/web/generated/pwaHtml.ts` and static icons/manifest into `pwaAssets.ts` |
 | `embed-pwa.mjs` (+ web build) | `npm run refresh:pwa` | `build:web` then embed — use with Metro reload (no APK) |
 | `generate-tab-icons.mjs` | `node scripts/generate-tab-icons.mjs` | White silhouette PNGs for Android native tab icons (`assets/images/tabs/`) |
-| `generate-brand-icons.mjs` | `npm run generate:brand-icons` | Derive launcher, splash, notification, and PWA icons from `assets/logo/v6/v6.png` (adds platform safe-zone padding) |
+| `generate-brand-icons.mjs` | `npm run generate:brand-icons` | Derive launcher, splash, notification, and PWA icons from the private brand master; committed outputs live in `assets/images/` |
 | `build-apk.mjs` | `npm run build:apk` | If `pkey_v{code}.apk` exists, bump version → SDK props → Gradle debug APK → `builds/android/pkey_v{code}.apk` |
 | `ensure-android-sdk.mjs` | Called by `build-apk.mjs` | Write `android/local.properties` `sdk.dir` |
 | `generate-import-fixtures.ts` | `npm run generate:import-fixtures` | Regenerate importer `sample.*` + `expected.json` |
@@ -17,8 +17,7 @@ Node/TypeScript utilities that support the monorepo build pipeline and quality c
 | `check-core-purity.mjs` | `npm run check:core-purity` | Fail if `@pkey/core` source imports `react-native` or `expo-*` (comments ignored) |
 | `generate-third-party-notices.mjs` | `npm run legal:notices` | Third-party license report for legal notices |
 | `build-legal-site.mjs` | `npm run legal:site` | Static HTML in `legal-site/` for GitHub Pages |
-| `sync-public-snapshot.mjs` | `npm run sync:public -- <dir>` | Copy a clean tree (no history, no `archive/`) to the public clone |
-| `bootstrap-public-github.mjs` | `node scripts/bootstrap-public-github.mjs` | One-time: rename `pkey-dev`, create public `pkey`, push orphan snapshot |
+| `sync-public-snapshot.mjs` | `npm run sync:public -- <dir>` | Copy a filtered audit tree to the public clone |
 | `stampBuildIntegrity.ts` | `npm run stamp:integrity` | Writes commit + timestamp into `app.json` `extra.buildIntegrity` before a store AAB |
 | `check-16kb-page-size.mjs` | `npm run check:16kb -- file.aab` | ELF 16 KB LOAD alignment for `.so` inside an AAB/APK |
 
@@ -42,7 +41,7 @@ npm run refresh:pwa   # then Metro reload + hard-refresh browser on :7392
 | `ANDROID_SDK_ROOT` | Optional | Alternate SDK path |
 | `CI` | Optional | Used by Playwright elsewhere |
 
-See [`.env.example`](../.env.example) and [DEPLOYMENT.md](./DEPLOYMENT.md).
+See [`.env.example`](../.env.example).
 
 ## How to test locally
 

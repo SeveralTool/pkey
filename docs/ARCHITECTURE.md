@@ -164,10 +164,7 @@ the Copy address fallback).
 Copy/QR prefer the published `.local` URL. The numeric address is a fallback
 when the name does not open (typical on some Windows browsers).
 
-## Related validation
+## Related
 
-- [SECURITY_HARDENING_VALIDATION.md](./SECURITY_HARDENING_VALIDATION.md)
-- [MIGRATION_TLS_VALIDATION.md](./MIGRATION_TLS_VALIDATION.md)
-- [WEB_MDNS_VALIDATION.md](./WEB_MDNS_VALIDATION.md)
 - [PERFORMANCE.md](./PERFORMANCE.md)
-- Historical session notes: [archive/SESSION_SECURITY_EXPLANATION.md](../archive/SESSION_SECURITY_EXPLANATION.md)
+- [THREAT_MODEL.md](./THREAT_MODEL.md)

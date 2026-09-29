@@ -8,9 +8,10 @@
  *   npm run sync:public -- C:\\proyects\\pkey-public
  *   node scripts/sync-public-snapshot.mjs ../pkey-public
  */
-import { cpSync, existsSync, mkdirSync, rmSync, statSync } from 'node:fs';
-import { basename, join, resolve } from 'node:path';
+import { cpSync, existsSync, mkdirSync, readdirSync, rmSync } from 'node:fs';
+import { join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { shouldSkipPublicPath } from './public-snapshot-filter.mjs';
 
 const root = resolve(fileURLToPath(new URL('..', import.meta.url)));
 const destArg = process.argv[2];
@@ -25,62 +26,31 @@ if (dest === root) {
   process.exit(1);
 }
 
-const SKIP_NAMES = new Set([
-  '.git',
-  'node_modules',
-  '.expo',
-  'builds',
-  'coverage',
-  'test-results',
-  'playwright-report',
-  'dist',
-  'web-build',
-  '.cursor',
-  '.idea',
-  'archive',
-  '.DS_Store',
-  '.env',
-]);
-
-const SKIP_ROOT_DIRS = new Set(['android', 'ios']);
-
 /** @param {string} srcPath */
 function shouldSkip(srcPath) {
-  const rel = srcPath.slice(root.length + 1).replaceAll('\\', '/');
-  const parts = rel.split('/');
-  const name = basename(srcPath);
-  if (SKIP_NAMES.has(name)) return true;
-  if (parts.length === 1 && SKIP_ROOT_DIRS.has(name)) {
-    try {
-      return statSync(srcPath).isDirectory();
-    } catch {
-      return false;
-    }
+  const rel = relative(root, srcPath).replaceAll('\\', '/');
+  return shouldSkipPublicPath(rel);
+}
+
+/**
+ * Drop previously published files that the filter now excludes.
+ * Keep `.git` and `node_modules` so the public clone can stamp without a full reinstall.
+ * @param {string} destDir
+ */
+function clearDestKeepGitAndNodeModules(destDir) {
+  if (!existsSync(destDir)) return;
+  for (const name of readdirSync(destDir)) {
+    if (name === '.git' || name === 'node_modules') continue;
+    rmSync(join(destDir, name), { recursive: true, force: true });
   }
-  if (
-    name.endsWith('.jks') ||
-    name.endsWith('.p8') ||
-    name.endsWith('.p12') ||
-    name.endsWith('.key')
-  ) {
-    return true;
-  }
-  if (name === 'test_output.txt' || name === 'test_full_output.txt' || name === 'tsc_output.txt') {
-    return true;
-  }
-  if (
-    rel.startsWith('modules/') &&
-    (rel.includes('/android/build') || rel.includes('/android/.gradle'))
-  ) {
-    return true;
-  }
-  return false;
 }
 
 if (!existsSync(dest)) mkdirSync(dest, { recursive: true });
 
 const destGit = join(dest, '.git');
 const keepGit = existsSync(destGit);
+
+clearDestKeepGitAndNodeModules(dest);
 
 cpSync(root, dest, {
   recursive: true,
@@ -97,6 +67,6 @@ if (!keepGit && existsSync(destGit)) {
 
 console.log(`Public snapshot copied to ${dest}`);
 console.log(
-  'Excluded: .git history, archive/, node_modules, generated android/ios, keystores, .env'
+  'Excluded: maintainer docs, brand archive, store/lab notes, AGENTS.md, .git history, archive/, node_modules, generated android/ios, keystores, .env'
 );
 console.log('Next: cd into destination, commit, npm run stamp:integrity, then EAS from that HEAD.');

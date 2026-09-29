@@ -64,9 +64,6 @@ Optional **login with phone** (`webLoginOnPhone`): the PWA login screen can unlo
 ## Related
 
 - [SECURITY.md](./SECURITY.md) — vulnerability reporting
-- [SECURITY_REMEDIATION.md](./SECURITY_REMEDIATION.md) — finding → fix matrix
-- [SECURITY_HARDENING_VALIDATION.md](./SECURITY_HARDENING_VALIDATION.md) — lab checklist
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — encryption and data flow
 - [MOBILE_APP.md](./MOBILE_APP.md) — device secret + recovery kit (user help `device_secret`)
 - [WEB_CLIENT.md](./WEB_CLIENT.md) — LAN browser vault
-- [MIGRATION_TLS_VALIDATION.md](./MIGRATION_TLS_VALIDATION.md) — peer TLS checks

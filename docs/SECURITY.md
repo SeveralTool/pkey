@@ -51,15 +51,11 @@ We will not pursue legal action against researchers who:
 - **Local-first:** Vault ciphertext stays on the user’s devices. There is no vendor cloud sync of secrets.
 - **Audit source:** The GitHub repository is published so independent reviewers can inspect crypto, sync, migration, and storage behavior.
 - **Privacy policy (app distribution):** Draft user-facing policy lives in [legal/PRIVACY_POLICY.md](./legal/PRIVACY_POLICY.md) (attorney review required before store publication).
-- **Build integrity:** Publish and verify **SHA-256** digests of distributed APK/AAB artifacts as described in [DEPLOYMENT.md](./DEPLOYMENT.md#sha-256-verification-transparency).
+- **Build integrity:** Official store uploads publish **SHA-256** digests of the AAB on the corresponding GitHub Release.
 
-## Hardening and validation notes
+## Related
 
 | Document | Topic |
 |----------|-------|
 | [THREAT_MODEL.md](./THREAT_MODEL.md) | Short threat model (LAN web, migration, assets) |
-| [SECURITY_HARDENING_VALIDATION.md](./SECURITY_HARDENING_VALIDATION.md) | Hardening checklist |
-| [MIGRATION_TLS_VALIDATION.md](./MIGRATION_TLS_VALIDATION.md) | Migration TLS |
-| [WEB_MDNS_VALIDATION.md](./WEB_MDNS_VALIDATION.md) | Web / mDNS |
 | [ARCHITECTURE.md](./ARCHITECTURE.md) | Encryption and data flow |
-| [archive/SESSION_SECURITY_EXPLANATION.md](../archive/SESSION_SECURITY_EXPLANATION.md) | Historical session notes |

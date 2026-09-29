@@ -185,7 +185,5 @@ npm run prebuild:mobile
 ## Related
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md)
-- [DEPLOYMENT.md](./DEPLOYMENT.md)
-- [DEPLOY_CHECKLIST.md](./DEPLOY_CHECKLIST.md)
 - [WEB_CLIENT.md](./WEB_CLIENT.md)
 - Stub: [`src/README.md`](../src/README.md)

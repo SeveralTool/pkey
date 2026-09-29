@@ -56,10 +56,9 @@ npm run test:web
 | `SeveralTool/pkey-dev` | Private | Day-to-day history, WIP |
 | `SeveralTool/pkey` | Public | Canonical audit source. Same URLs as [legalContact.ts](../src/constants/legalContact.ts) |
 
-Public history is a **clean snapshot** (no `pkey-dev` commits). Ask an agent to run [dev_procedure/SYNC_PUBLIC.md](./dev_procedure/SYNC_PUBLIC.md). Manual recipe: [DEPLOYMENT.md](./DEPLOYMENT.md#public-snapshot-and-store-aab).
+Public history is a **filtered snapshot** (runtime source and auditor docs; no `pkey-dev` WIP). Maintainer playbooks stay private.
 
 ## Next
 
 - [ARCHITECTURE.md](./ARCHITECTURE.md) — encryption and data flow
-- [DEPLOYMENT.md](./DEPLOYMENT.md) — EAS, AAB, hashes
 - [SECURITY.md](./SECURITY.md) — private vulnerability reports

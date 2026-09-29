@@ -74,7 +74,6 @@ Consumed as `"pkey-web-access": "file:./modules/pkey-web-access"` from the app r
 
 - [MOBILE_APP.md](./MOBILE_APP.md)
 - [ARCHITECTURE.md](./ARCHITECTURE.md)
-- [WEB_MDNS_VALIDATION.md](./WEB_MDNS_VALIDATION.md)
 - Stub: [`modules/pkey-web-access/README.md`](../modules/pkey-web-access/README.md)
 
-mDNS publication stays in `react-native-zeroconf` (`src/services/webDiscovery.ts`) until the [WEB_MDNS_VALIDATION.md](./WEB_MDNS_VALIDATION.md) lab shows that no desktop resolver sees an A/AAAA record. Moving publish into this module (NsdManager / NetService) would not fix Chrome Secure DNS on Windows; keep the numeric Copy address fallback.
+mDNS publication stays in `react-native-zeroconf` (`src/services/webDiscovery.ts`). Moving publish into this module (NsdManager / NetService) would not fix Chrome Secure DNS on Windows; keep the numeric Copy address fallback.
