@@ -17,6 +17,7 @@ import Constants from 'expo-constants';
 import { useSettings } from '../../context/SettingsContext';
 import { useCoreState } from '../../context/CoreStateContext';
 import { getLegalDocumentBody, type LegalDocumentId } from '../../constants/legalContent';
+import type { LocaleStrings } from '../../constants/localization';
 import { LEGAL_WEB_URLS } from '../../constants/legalContact';
 import { openExternalLink } from '../../utils/openExternalLink';
 import { resolveAppUiLanguage } from '../../utils/devicePreferences';
@@ -27,7 +28,7 @@ interface Props {
   onClose: () => void;
 }
 
-const TITLE_KEYS: Record<LegalDocumentId, string> = {
+const TITLE_KEYS: Record<LegalDocumentId, keyof LocaleStrings> = {
   privacy: 'legal_privacy_title',
   terms: 'legal_terms_title',
   third_party: 'legal_third_party_title',
@@ -64,7 +65,7 @@ export const LegalDocumentModal: React.FC<Props> = ({ visible, documentId, onClo
   if (!documentId) return null;
 
   const titleKey = TITLE_KEYS[documentId];
-  const title = String((t as Record<string, string>)[titleKey] ?? documentId);
+  const title = String(t[titleKey] ?? documentId);
   const body = getLegalDocumentBody(documentId);
   const webUrl = LEGAL_WEB_URLS[documentId];
   const showEnglishNotice = resolveAppUiLanguage(db.settings.language) === 'ESP';

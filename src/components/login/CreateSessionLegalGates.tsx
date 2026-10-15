@@ -6,7 +6,14 @@
  * shake + outline flash (skipped when Reduce Motion is on).
  */
 import React, { useEffect } from 'react';
-import { View, Text, TouchableOpacity, Pressable, StyleSheet } from 'react-native';
+import {
+  View,
+  Text,
+  TouchableOpacity,
+  Pressable,
+  StyleSheet,
+  type AccessibilityState,
+} from 'react-native';
 import Animated from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../../context/SettingsContext';
@@ -24,6 +31,13 @@ export interface CreateSessionLegalGatesProps {
 
 const CHECK_SLOT = 28;
 const PANEL_RADIUS = 12;
+
+/**
+ * `invalid` is not part of React Native's `AccessibilityState` yet; the platforms ignore
+ * unknown keys, so it acts as an inspection hook (tests read it) without affecting a11y output.
+ */
+type GateAccessibilityState = AccessibilityState & { invalid?: boolean };
+const invalidState = (invalid: boolean): GateAccessibilityState => ({ invalid });
 
 /** Mix a `#RRGGBB` token with an alpha channel. */
 function withAlpha(hex: string, alpha: number): string {
@@ -65,7 +79,7 @@ export const CreateSessionLegalGates: React.FC<CreateSessionLegalGatesProps> = (
     <Animated.View style={shakeStyle}>
       <View
         testID="create-session-legal-gates"
-        accessibilityState={{ invalid }}
+        accessibilityState={invalidState(invalid)}
         style={[
           styles.panel,
           {
@@ -164,7 +178,7 @@ const LegalGateRow: React.FC<LegalGateRowProps> = ({
 }) => (
   <View
     testID={`${testID}-wrap`}
-    accessibilityState={{ invalid: pending }}
+    accessibilityState={invalidState(pending)}
     style={[
       styles.item,
       pending && {
@@ -209,7 +223,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   flashRing: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: PANEL_RADIUS,
     borderWidth: 2,
   },

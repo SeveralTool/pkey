@@ -69,7 +69,7 @@ describe('challenge-response', () => {
   it('verifies a SPAKE2 confirmation', () => {
     const store = new ChallengeStore();
     const challenge = store.create('fp', Date.now(), secret);
-    const share = store.spakeShareOf('fp');
+    const share = store.spakeShareOf('fp') ?? '';
     expect(share).toBeTruthy();
     const mine = spake2Start(secret, 'B');
     const shared = spake2Finish(secret, mine, share, 'B');

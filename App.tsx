@@ -1,5 +1,6 @@
 import './src/bootstrap/cryptoPolyfill';
 import './src/bootstrap/nativePbkdf2';
+import './src/services/autoBackupTask';
 import 'react-native-gesture-handler';
 import 'react-native-reanimated';
 
@@ -31,6 +32,7 @@ import { AppErrorBoundary } from './src/components/common/AppErrorBoundary';
 import { NotificationOverlay } from './src/components/notifications/NotificationOverlay';
 import { NotificationOverlayErrorBoundary } from './src/components/notifications/NotificationOverlayErrorBoundary';
 import { useOsNotificationRouting } from './src/hooks/useOsNotificationRouting';
+import { useAutoBackup } from './src/hooks/useAutoBackup';
 
 const DashboardFallback = () => {
   const { c } = useSettings();
@@ -47,6 +49,7 @@ const DashboardFallback = () => {
 const MainApp = () => {
   const { isLogged } = useCoreState();
   useOsNotificationRouting();
+  useAutoBackup();
 
   useEffect(() => {
     let active = true;

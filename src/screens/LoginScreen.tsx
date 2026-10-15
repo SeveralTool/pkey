@@ -120,6 +120,12 @@ export const LoginScreen = () => {
 
   const isLocked = lockRemainingSec > 0;
 
+  const submitUnlock = () => {
+    Keyboard.dismiss();
+    if (authBusy || isLocked) return;
+    void handleOpenSession(masterPassword);
+  };
+
   const requireFirstUseGates = (): boolean => {
     if (acceptedLegal) {
       setLegalGateError('');
@@ -492,6 +498,11 @@ export const LoginScreen = () => {
                 onChangeText={setMasterPassword}
                 autoCorrect={false}
                 autoCapitalize="none"
+                returnKeyType="go"
+                blurOnSubmit
+                onSubmitEditing={submitUnlock}
+                editable={!authBusy && !isLocked}
+                accessibilityLabel={t.login_placeholder}
               />
 
               {isLocked ? (
@@ -522,7 +533,7 @@ export const LoginScreen = () => {
                       opacity: authBusy || isLocked ? 0.7 : 1,
                     },
                   ]}
-                  onPress={() => handleOpenSession(masterPassword)}
+                  onPress={submitUnlock}
                   disabled={authBusy || isLocked}
                   accessibilityRole="button"
                   accessibilityLabel={t.login_btn}

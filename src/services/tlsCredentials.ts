@@ -178,6 +178,12 @@ export async function ensureTlsCredentials(
  * Options for `Tcp.connectTLS()` to a local self-signed migration server.
  * Must be used with `connectTLS` (not `createConnection` + `tls: true` — native
  * expects a ReadableMap for TLS context, not a boolean).
+ *
+ * `rejectUnauthorized: false` makes the whole TLS authorization result non-fatal:
+ * the CA chain and the hostname check. The cert is self-signed, and migration
+ * dials a LAN IP that is not in the default SANs (CN, `localhost`, `127.0.0.1`).
+ * There is no separate hostname verifier. Callers must pin with
+ * {@link tlsFingerprintsMatch} against the certificate the socket actually presented.
  */
 export function getTlsClientOptions(host: string, port: number) {
   return {
@@ -257,7 +263,44 @@ export function clearTlsCredentialsCache(): void {
   memoryCache = null;
 }
 
-/** SHA-256 fingerprint of PEM certificate (first 16 hex chars, uppercase). */
+/**
+ * Hex chars of SHA-256 shown to the user for the migration certificate compare
+ * (128 bits). Both the receiver-declared value (`/info.tlsFingerprint`) and the
+ * socket-observed value (`MigrationTcpSession.peerFingerprint`) use this length.
+ */
+export const TLS_FINGERPRINT_HEX_LEN = 32;
+
+const TLS_FINGERPRINT_RE = /^[0-9A-F]{32}$/;
+
+/**
+ * Uppercase 32-hex migration certificate fingerprint, or null when `value`
+ * is not that shape. Shorter or longer digests do not pin.
+ */
+export function normalizeTlsFingerprint(value: unknown): string | null {
+  if (typeof value !== 'string') return null;
+  const norm = value.trim().toUpperCase();
+  return TLS_FINGERPRINT_RE.test(norm) ? norm : null;
+}
+
+/**
+ * True when both sides produced the same observed certificate fingerprint.
+ * A missing observation or a missing declaration does not match.
+ */
+export function tlsFingerprintsMatch(observed: unknown, declared: unknown): boolean {
+  const left = normalizeTlsFingerprint(observed);
+  const right = normalizeTlsFingerprint(declared);
+  return left !== null && left === right;
+}
+
+/** Formats a full SHA-256 hex digest as the user-visible fingerprint (uppercase prefix). */
+export function formatTlsFingerprintHex(sha256Hex: string): string {
+  return sha256Hex
+    .replace(/[^0-9a-fA-F]/g, '')
+    .slice(0, TLS_FINGERPRINT_HEX_LEN)
+    .toUpperCase();
+}
+
+/** SHA-256 fingerprint of PEM certificate (first {@link TLS_FINGERPRINT_HEX_LEN} hex chars, uppercase). */
 export function fingerprintTlsCertificatePem(pem: string): string {
   if (!pem || typeof pem !== 'string') return '';
   const body = pem
@@ -266,5 +309,5 @@ export function fingerprintTlsCertificatePem(pem: string): string {
     .replace(/\s/g, '');
   if (!body) return '';
   const der = Base64.parse(body);
-  return SHA256(der).toString(Hex).slice(0, 16).toUpperCase();
+  return formatTlsFingerprintHex(SHA256(der).toString(Hex));
 }

@@ -109,11 +109,14 @@ interface EnvelopeV4Json {
 
 type Envelope = EnvelopeV1 | EnvelopeV2 | EnvelopeV3 | EnvelopeV4Json;
 
+/** Loose superset of every envelope version; `v` is omitted so the intersection does not collapse to `never`. */
+type EnvelopeCandidate = Partial<
+  Omit<EnvelopeV2, 'v'> & Omit<EnvelopeV3, 'v'> & Omit<EnvelopeV4Json, 'v'>
+> & { v?: unknown };
+
 function parseEnvelope(text: string): Envelope | null {
   try {
-    const parsed = JSON.parse(text) as Partial<EnvelopeV2 & EnvelopeV3 & EnvelopeV4Json> & {
-      v?: unknown;
-    };
+    const parsed = JSON.parse(text) as EnvelopeCandidate;
     if (parsed.v === 4 && isEnvelopeV4(parsed)) {
       return parsed as EnvelopeV4Json;
     }

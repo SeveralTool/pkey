@@ -152,3 +152,7 @@ const icoPng = await padIntoCanvas(32, 1, OPAQUE_BLACK);
 writeFileSync(join(out.webPublic, 'favicon.ico'), pngToIco(icoPng, 32));
 
 console.log('Generated brand icons from', masterPath);
+
+const { generatePlayStoreFeatureGraphic } = await import('./generate-play-store-graphic.mjs');
+const featurePath = await generatePlayStoreFeatureGraphic();
+console.log('Wrote Play Store feature graphic', featurePath);

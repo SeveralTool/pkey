@@ -57,7 +57,7 @@ const FieldHelp: React.FC<{ children: string; color: string }> = ({ children, co
   <Text style={[s.fieldHelp, { color }]}>{children}</Text>
 );
 
-export const MigrationFlowScreen: React.FC = () => {
+export const MigrationFlowScreen = React.memo(function MigrationFlowScreen(): React.JSX.Element | null {
   const { c, t } = useSettings();
   const {
     migrationVisible,
@@ -857,4 +857,4 @@ export const MigrationFlowScreen: React.FC = () => {
       </View>
     </Modal>
   );
-};
+});

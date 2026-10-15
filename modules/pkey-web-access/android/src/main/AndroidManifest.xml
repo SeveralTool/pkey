@@ -1,8 +1,15 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+  <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
   <application>
     <service
       android:name="expo.modules.pkeywebaccess.WebAccessForegroundService"
       android:exported="false"
-      android:foregroundServiceType="connectedDevice" />
+      android:foregroundServiceType="connectedDevice"
+      android:stopWithTask="true" />
+    <service
+      android:name="expo.modules.pkeywebaccess.BackupKeepAliveService"
+      android:exported="false"
+      android:foregroundServiceType="dataSync"
+      android:stopWithTask="true" />
   </application>
 </manifest>

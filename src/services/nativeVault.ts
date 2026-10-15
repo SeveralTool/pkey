@@ -17,7 +17,11 @@ import {
   type EnvelopeV4,
 } from '@pkey/core';
 import { LocalCipher } from './crypto';
-import { mixDeviceSecret } from './deviceSecret';
+import {
+  isDeviceSecretRequiredError,
+  isUserCanceledAuth,
+  mixDeviceSecretOrRequire,
+} from './deviceSecret';
 import {
   isNativeAeadReady,
   isNativeKdfReady,
@@ -43,6 +47,16 @@ export {
   isNativeKdfUnavailableError,
   isJsArgon2FallbackAllowed,
 } from './nativeKdfPolicy';
+export { DeviceSecretRequiredError, isDeviceSecretRequiredError } from './deviceSecret';
+
+/** Options for opening a vault payload. */
+export interface DecryptVaultOptions {
+  /**
+   * Device secret from a typed recovery kit (hex). When set, a `deviceBound`
+   * envelope is opened with this secret instead of the local hardware item.
+   */
+  readonly deviceSecretHex?: string;
+}
 
 let probePromise: Promise<boolean> | null = null;
 
@@ -253,8 +267,14 @@ async function dropQuietly(handle: string): Promise<void> {
 
 /**
  * One native Argon2id, then AEAD (native or JS). Never retries with JS Argon2.
+ * Throws {@link DeviceSecretRequiredError} when the envelope is `deviceBound`
+ * and this phone has no usable secret (and no `deviceSecretHex` was supplied).
  */
-async function tryDecryptV4Native(password: string, env: EnvelopeV4): Promise<string | null> {
+async function tryDecryptV4Native(
+  password: string,
+  env: EnvelopeV4,
+  deviceSecretHex?: string
+): Promise<string | null> {
   if (!pkeyCrypto) return null;
   const started = Date.now();
   recordKdfDerive();
@@ -284,20 +304,8 @@ async function tryDecryptV4Native(password: string, env: EnvelopeV4): Promise<st
   if (env.deviceBound === true) {
     try {
       const unboundHex = await pkeyCrypto.exportKey(handle);
-      const mixed = await mixDeviceSecret(unboundHex, 'PKEY');
       await dropQuietly(handle);
-      if (!mixed) {
-        recordKdfMetric({
-          source: 'native',
-          op: 'unlock',
-          durationMs: Date.now() - started,
-          m: env.kdfMem,
-          t: env.kdfTime,
-          p: env.kdfPar,
-          outcome: 'fail',
-        });
-        return null;
-      }
+      const mixed = await mixDeviceSecretOrRequire(unboundHex, 'PKEY', deviceSecretHex);
       const mixedHandle = await pkeyCrypto.importKey(mixed);
       plain = await openV4WithHandle(mixedHandle, env);
       if (plain) {
@@ -315,8 +323,14 @@ async function tryDecryptV4Native(password: string, env: EnvelopeV4): Promise<st
       }
       await dropQuietly(mixedHandle);
     } catch (err) {
-      console.warn('[nativeVault] device-bound decrypt failed:', err);
       await dropQuietly(handle);
+      if (isDeviceSecretRequiredError(err)) {
+        // Not a wrong password: the caller asks for the recovery kit.
+        throw err;
+      }
+      if (!isUserCanceledAuth(err)) {
+        console.warn('[nativeVault] device-bound decrypt failed:', err);
+      }
     }
     recordKdfMetric({
       source: 'native',
@@ -346,7 +360,8 @@ async function tryDecryptV4Native(password: string, env: EnvelopeV4): Promise<st
 async function decryptV4Js(
   password: string,
   envelopeJson: string,
-  env: EnvelopeV4
+  env: EnvelopeV4,
+  deviceSecretHex?: string
 ): Promise<string> {
   kdfPolicy.assertJsArgon2Allowed(env.kdfMem);
   const started = Date.now();
@@ -359,7 +374,13 @@ async function decryptV4Js(
   let plain = decryptVaultV4(envelopeJson, unbound);
   let root = unbound;
   if (!plain && env.deviceBound === true) {
-    const mixed = await mixDeviceSecret(unbound, 'PKEY');
+    let mixed: string | null = null;
+    try {
+      mixed = await mixDeviceSecretOrRequire(unbound, 'PKEY', deviceSecretHex);
+    } catch (err) {
+      if (isDeviceSecretRequiredError(err)) throw err;
+      mixed = null;
+    }
     if (mixed) {
       const bound = decryptVaultV4(envelopeJson, mixed);
       if (bound) {
@@ -386,8 +407,18 @@ async function decryptV4Js(
 /**
  * Decrypts a vault payload. At most one Argon2id per call for v4.
  * Production: native KDF required; wrong password does not retry in JS.
+ *
+ * Returns `''` on a wrong password. Throws {@link DeviceSecretRequiredError}
+ * when the envelope is `deviceBound` and the local secret is missing or
+ * unreadable; the caller should collect the recovery kit and call again with
+ * `opts.deviceSecretHex` (that retry costs a second Argon2id — acceptable for
+ * a recovery path).
  */
-export async function decryptVaultPayload(password: string, payload: string): Promise<string> {
+export async function decryptVaultPayload(
+  password: string,
+  payload: string,
+  opts?: DecryptVaultOptions
+): Promise<string> {
   beginKdfAttempt();
   await ensureNativeVaultCryptoProbed();
   const trimmed = payload.trim();
@@ -401,9 +432,10 @@ export async function decryptVaultPayload(password: string, payload: string): Pr
     if (isEnvelopeV4(parsed)) {
       if (isNativeKdfReady() && pkeyCrypto) {
         try {
-          const nativePlain = await tryDecryptV4Native(password, parsed);
+          const nativePlain = await tryDecryptV4Native(password, parsed, opts?.deviceSecretHex);
           return nativePlain ?? '';
         } catch (err) {
+          if (isDeviceSecretRequiredError(err)) throw err;
           console.warn('[nativeVault] native v4 decrypt failed:', err);
           return '';
         }
@@ -411,7 +443,7 @@ export async function decryptVaultPayload(password: string, payload: string): Pr
       if (!kdfPolicy.isJsArgon2FallbackAllowed()) {
         throw new NativeKdfUnavailableError();
       }
-      return decryptV4Js(password, trimmed, parsed);
+      return decryptV4Js(password, trimmed, parsed, opts?.deviceSecretHex);
     }
   }
   return LocalCipher.decrypt(payload, password);

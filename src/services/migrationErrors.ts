@@ -1,6 +1,7 @@
 /**
  * @fileoverview Typed errors for the migration send flow (localized in MigrationContext).
  */
+import type { LocaleStrings } from '../constants/localization';
 
 /** Error codes for migration send flow — map to localized strings in MigrationContext. */
 export type MigrationSendErrorCode =
@@ -31,12 +32,11 @@ export class MigrationSendError extends Error {
 }
 
 /** Maps a `MigrationSendError` to a user-facing localized string. */
-export const translateMigrationSendError = (
-  err: MigrationSendError,
-  t: Record<string, string>
-): string => {
-  const key = `migration_err_${err.code.toLowerCase()}` as keyof typeof t;
-  const base = (t[key] as string) || t.migration_send_failed;
+export const translateMigrationSendError = (err: MigrationSendError, t: LocaleStrings): string => {
+  // Keys are built dynamically from the error code, so look them up through an unknown-valued view.
+  const dict: Record<string, unknown> = t;
+  const candidate = dict[`migration_err_${err.code.toLowerCase()}`];
+  const base = typeof candidate === 'string' && candidate ? candidate : t.migration_send_failed;
   return err.detail ? `${base} (${err.detail})` : base;
 };
 

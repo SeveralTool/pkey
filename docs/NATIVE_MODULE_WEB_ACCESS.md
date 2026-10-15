@@ -6,7 +6,7 @@ Expo module that keeps the in-app web sync server (port **7392**) usable across 
 
 | Platform | Keep-alive | Port reclaim | Product OS alerts |
 |----------|------------|--------------|-------------------|
-| **Android** | Sticky **foreground service** (`connectedDevice`). Android requires an ongoing notification while the service runs (`IMPORTANCE_MIN`, silent, short body: LAN web access active in background) | `releaseWebSyncPort(port)` closes orphan `TcpSocketServer` entries after JS/Metro reload | **New browser synced** (`SyncContext` → in-app alert with Block if foreground, auto-dismiss after 10s; else `expo-notifications` channel `pkey-actions` with Block action) |
+| **Android** | **Foreground service** (`connectedDevice`) while the task is alive (Home, screen off). Swiping PKEY away stops it (`stopWithTask`, `START_NOT_STICKY`) so the notification is not reposted without the JS server. Android requires an ongoing notification while the service runs (`IMPORTANCE_MIN`, silent; title “Web access is on”, body says the vault stays available on this network) | `releaseWebSyncPort(port)` closes orphan `TcpSocketServer` entries after JS/Metro reload | **New browser synced** (`SyncContext` → in-app alert with Block if foreground, auto-dismiss after 10s; else `expo-notifications` channel `pkey-actions` with Block action) |
 | **iOS** | `UIBackgroundTask` grace period; screen keep-awake while foregrounded (JS via `expo-keep-awake`). **No** sticky local notification | Stub (empty diagnostics) | Same: **new browser synced** only |
 | Expo Go / missing native | No sticky Expo fallback | Patched `TcpSockets.closeServersByPort` path from `syncWebServer.ts` | Still works if OS notifications are available |
 
@@ -21,7 +21,8 @@ modules/pkey-web-access/
 ├── expo-module.config.json               apple + android
 ├── android/.../pkeywebaccess/
 │   ├── PkeyWebAccessModule.kt            AsyncFunctions
-│   ├── WebAccessForegroundService.kt     START_STICKY FG service (minimal noti)
+│   ├── WebAccessForegroundService.kt     FG service; stops when the task is swiped away
+│   ├── BackupKeepAliveService.kt         dataSync FG service for 1-minute auto-backup
 │   └── WebSyncPortOwner.kt               Closes TcpSocketServer entries on a port
 └── ios/
     ├── PkeyWebAccess.podspec
@@ -29,8 +30,8 @@ modules/pkey-web-access/
 ```
 
 - Android FG channel: `"pkey_web_access_fg"` / `"PKEY"` (`IMPORTANCE_MIN`)
-- Android FG notification ID: **7392**
-- Android manifest: `foregroundServiceType="connectedDevice"`
+- Android FG notification ID: **7392** (web) and **7401** (1-minute auto-backup keep-alive)
+- Android manifest: web `foregroundServiceType="connectedDevice"`; backup `foregroundServiceType="dataSync"` (`FOREGROUND_SERVICE_DATA_SYNC`). The web service keeps `:7392` up while PKEY is minimized or the phone is locked. `stopWithTask` drops it when PKEY is swiped away, and `START_NOT_STICKY` keeps a killed process from reposting the notification with no JS server. The backup service does not listen on `:7392`. It only keeps the process scheduled so the JS 1-minute timer survives leaving the app, and `stopWithTask` drops that service on swipe as well.
 - iOS event `onBackgroundTimeExpiring` when the grace period ends
 
 ## Why `releaseWebSyncPort` exists (Android)

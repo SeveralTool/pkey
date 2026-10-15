@@ -9,10 +9,13 @@ Node/TypeScript utilities that support the monorepo build pipeline and quality c
 | `embed-pwa.mjs` | `npm run embed:pwa` | Embed Vite single-file HTML into `src/web/generated/pwaHtml.ts` and static icons/manifest into `pwaAssets.ts` |
 | `embed-pwa.mjs` (+ web build) | `npm run refresh:pwa` | `build:web` then embed — use with Metro reload (no APK) |
 | `generate-tab-icons.mjs` | `node scripts/generate-tab-icons.mjs` | White silhouette PNGs for Android native tab icons (`assets/images/tabs/`) |
-| `generate-brand-icons.mjs` | `npm run generate:brand-icons` | Derive launcher, splash, notification, and PWA icons from the private brand master; committed outputs live in `assets/images/` |
+| `generate-brand-icons.mjs` | `npm run generate:brand-icons` | Derive launcher, splash, notification, PWA icons, and the Play feature graphic from the private brand master |
+| `generate-play-store-graphic.mjs` | `node scripts/generate-play-store-graphic.mjs` | Opaque 1024×500 Play feature graphic (black; Play rejects alpha) |
 | `build-apk.mjs` | `npm run build:apk` | If `pkey_v{code}.apk` exists, bump version → SDK props → Gradle debug APK → `builds/android/pkey_v{code}.apk` |
 | `ensure-android-sdk.mjs` | Called by `build-apk.mjs` | Write `android/local.properties` `sdk.dir` |
 | `generate-import-fixtures.ts` | `npm run generate:import-fixtures` | Regenerate importer `sample.*` + `expected.json` |
+| `seed-listing-demo.ts` | `npm run seed:demo` | Write `docs/store/listing-demo.csv` and print how to load the same catalog on-device |
+| `prepare-play-screenshots.mjs` | `npm run screenshots:play` | 24-bit Play PNGs in `assets/app_screenshots/app_screenshots_store/` (does not touch originals) |
 | `validate-otp.ts` | `npm run validate:otp` | Cross-check `@pkey/core` TOTP vs `otplib` |
 | `check-core-purity.mjs` | `npm run check:core-purity` | Fail if `@pkey/core` source imports `react-native` or `expo-*` (comments ignored) |
 | `generate-third-party-notices.mjs` | `npm run legal:notices` | Third-party license report for legal notices |
@@ -48,6 +51,7 @@ See [`.env.example`](../.env.example).
 ```bash
 npm run build:web && npm run embed:pwa
 npm run generate:import-fixtures
+npm run seed:demo
 npm run test:core
 npm run validate:otp
 node --test scripts/check-16kb-page-size.test.mjs

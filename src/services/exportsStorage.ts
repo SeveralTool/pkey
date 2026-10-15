@@ -3,7 +3,8 @@
  *
  * Encrypted `.pkey` files live under `{documentDirectory}/exports/` (listed in Security).
  * Unencrypted CSV/JSON are written to `{cacheDirectory}/export-tmp/`, shared, then deleted.
- * Naming: `pkey-{YYYYMMDD}-{HHmmss}.{ext}` (type implied by extension only).
+ * Naming: `pkey-{YYYYMMDD}-{HHmmss}.{ext}` (manual) and
+ * `pkey-auto-{YYYYMMDD}-{HHmmss}.pkey` (automatic). Type is implied by extension.
  */
 import * as FileSystem from 'expo-file-system/legacy';
 import * as Sharing from 'expo-sharing';
@@ -20,13 +21,18 @@ export const EXPORT_DISK_HEADROOM_BYTES = 2 * 1024 * 1024;
 /** Delayed retry after share, in case the OS still has the ephemeral URI open. */
 export const EPHEMERAL_EXPORT_TTL_MS = 45_000;
 
-/** Hard cap on the total number of export files kept on this device (any type). */
+/** Hard cap on manual export files kept on this device (any extension). Automatic copies have their own cap. */
 export const EXPORT_MAX_FILES = 10;
+
+/** Hard cap on automatic `.pkey` snapshots. Independent of {@link EXPORT_MAX_FILES}. */
+export const AUTO_BACKUP_MAX_FILES = 3;
 
 /** Soft UI warning when free space is below this (bytes). */
 export const EXPORT_LOW_SPACE_BYTES = 50 * 1024 * 1024;
 
 export type ExportExt = 'pkey' | 'csv' | 'json';
+
+export type ExportOrigin = 'manual' | 'auto';
 
 export type ExportErrorCode =
   'no_space' | 'share_unavailable' | 'no_database' | 'write_failed' | 'limit' | 'unknown';
@@ -45,12 +51,13 @@ export interface ExportFileInfo {
   filename: string;
   uri: string;
   ext: ExportExt;
+  origin: ExportOrigin;
   size: number;
   /** Milliseconds since epoch (modification time when available). */
   modifiedAt: number;
 }
 
-const EXPORT_NAME_RE = /^pkey-(\d{8})-(\d{6})(?:-(\d+))?\.([a-z]+)$/i;
+const EXPORT_NAME_RE = /^pkey-(auto-)?(\d{8})-(\d{6})(?:-(\d+))?\.([a-z]+)$/i;
 
 const pendingEphemeralDeletes = new Map<string, ReturnType<typeof setTimeout>>();
 
@@ -113,17 +120,44 @@ export function parseExportFilename(filename: string): {
   time: string;
   suffix?: number;
   ext: ExportExt;
+  origin: ExportOrigin;
 } | null {
   const m = EXPORT_NAME_RE.exec(filename);
   if (!m) return null;
-  const ext = m[4].toLowerCase();
+  const isAuto = Boolean(m[1]);
+  const ext = m[5].toLowerCase();
   if (ext !== 'pkey' && ext !== 'csv' && ext !== 'json') return null;
+  if (isAuto && ext !== 'pkey') return null;
   return {
-    date: m[1],
-    time: m[2],
-    suffix: m[3] ? Number(m[3]) : undefined,
+    date: m[2],
+    time: m[3],
+    suffix: m[4] ? Number(m[4]) : undefined,
     ext,
+    origin: isAuto ? 'auto' : 'manual',
   };
+}
+
+/**
+ * Builds `pkey-auto-YYYYMMDD-HHmmss.pkey` (collision suffix handled by caller).
+ */
+export function buildAutoExportFilename(at: Date = new Date(), suffix?: number): string {
+  const { date, time } = formatExportTimestamp(at);
+  const mid = suffix && suffix > 1 ? `${date}-${time}-${suffix}` : `${date}-${time}`;
+  return `pkey-auto-${mid}.pkey`;
+}
+
+async function uniqueFilenameInDir(
+  dir: string,
+  build: (suffix?: number) => string
+): Promise<string> {
+  let suffix = 1;
+  for (;;) {
+    const name = build(suffix === 1 ? undefined : suffix);
+    const info = await FileSystem.getInfoAsync(`${dir}${name}`);
+    if (!info.exists) return name;
+    suffix += 1;
+    if (suffix > 99) return build(Date.now() % 100000);
+  }
 }
 
 async function uniqueExportFilenameInDir(
@@ -131,14 +165,11 @@ async function uniqueExportFilenameInDir(
   ext: ExportExt,
   at: Date = new Date()
 ): Promise<string> {
-  let suffix = 1;
-  for (;;) {
-    const name = buildExportFilename(ext, at, suffix === 1 ? undefined : suffix);
-    const info = await FileSystem.getInfoAsync(`${dir}${name}`);
-    if (!info.exists) return name;
-    suffix += 1;
-    if (suffix > 99) return buildExportFilename(ext, at, Date.now() % 100000);
-  }
+  return uniqueFilenameInDir(dir, (suffix) => buildExportFilename(ext, at, suffix));
+}
+
+async function uniqueAutoExportFilenameInDir(dir: string, at: Date = new Date()): Promise<string> {
+  return uniqueFilenameInDir(dir, (suffix) => buildAutoExportFilename(at, suffix));
 }
 
 function mimeForExt(ext: ExportExt): string {
@@ -203,8 +234,8 @@ export function utf8ByteLength(contents: string): number {
 }
 
 /**
- * Writes contents into the exports folder and returns the file URI.
- * Enforces the hard {@link EXPORT_MAX_FILES} cap (any extension) before writing.
+ * Writes a manual export into the exports folder and returns the file URI.
+ * Enforces {@link EXPORT_MAX_FILES} on manual files only; automatic copies are ignored.
  */
 export async function writeExportFile(
   ext: ExportExt,
@@ -213,7 +244,8 @@ export async function writeExportFile(
 ): Promise<{ uri: string; filename: string }> {
   const dir = await ensureExportsDir();
   const existing = await listExportFiles();
-  if (existing.length >= EXPORT_MAX_FILES) {
+  const manuals = existing.filter((file) => file.origin !== 'auto');
+  if (manuals.length >= EXPORT_MAX_FILES) {
     throw new ExportError('limit', `Export limit of ${EXPORT_MAX_FILES} files reached`);
   }
   const filename = await uniqueExportFilenameInDir(dir, ext);
@@ -230,6 +262,89 @@ export async function writeExportFile(
     throw new ExportError('write_failed', err instanceof Error ? err.message : undefined);
   }
   return { uri, filename };
+}
+
+async function writeUtf8File(uri: string, contents: string): Promise<void> {
+  await FileSystem.writeAsStringAsync(uri, contents, {
+    encoding: FileSystem.EncodingType.UTF8,
+  });
+}
+
+/**
+ * Writes `contents` to `uri` via a sibling `.tmp` and a rename, so a crash
+ * mid-write does not leave a truncated `.pkey` that the export list treats as real.
+ * When rename is unavailable, writes straight to `uri`.
+ */
+async function writeSnapshotFile(uri: string, contents: string): Promise<void> {
+  const moveAsync = (FileSystem as { moveAsync?: typeof FileSystem.moveAsync }).moveAsync;
+  if (typeof moveAsync !== 'function') {
+    await writeUtf8File(uri, contents);
+    return;
+  }
+  const tmpUri = `${uri}.tmp`;
+  try {
+    await writeUtf8File(tmpUri, contents);
+    await moveAsync({ from: tmpUri, to: uri });
+  } catch (err) {
+    await FileSystem.deleteAsync(tmpUri, { idempotent: true }).catch(() => undefined);
+    throw err;
+  }
+}
+
+/**
+ * Writes an automatic `.pkey` snapshot. Does not consult {@link EXPORT_MAX_FILES}.
+ * After a successful write, drops older automatic files until {@link AUTO_BACKUP_MAX_FILES} remain.
+ */
+export async function writeAutoBackupFile(
+  contents: string
+): Promise<{ uri: string; filename: string }> {
+  await assertEnoughDiskSpace(utf8ByteLength(contents));
+  const dir = await ensureExportsDir();
+  const filename = await uniqueAutoExportFilenameInDir(dir);
+  const uri = `${dir}${filename}`;
+  try {
+    await writeSnapshotFile(uri, contents);
+  } catch (err) {
+    if (isNoSpaceError(err)) {
+      throw new ExportError('no_space', err instanceof Error ? err.message : undefined);
+    }
+    throw new ExportError('write_failed', err instanceof Error ? err.message : undefined);
+  }
+  const autos = await listAutoBackupFiles();
+  for (const extra of autos.slice(AUTO_BACKUP_MAX_FILES)) {
+    try {
+      await deleteExportFile(extra.uri);
+    } catch {
+      // Best-effort rotation; the new file is already on disk.
+    }
+  }
+  return { uri, filename };
+}
+
+/** Automatic `.pkey` snapshots, newest first. */
+export async function listAutoBackupFiles(): Promise<ExportFileInfo[]> {
+  const files = await listExportFiles();
+  return files.filter((file) => file.origin === 'auto');
+}
+
+/**
+ * Resolves a listed export basename to a URI under Exports.
+ * Rejects path separators, `..`, and names that are not recognized export files.
+ */
+export async function resolveListedExportFilename(filename: string): Promise<string | null> {
+  if (!filename || filename !== filename.trim()) return null;
+  if (filename.includes('/') || filename.includes('\\') || filename.includes('..')) return null;
+  if (parseExportFilename(filename) === null) return null;
+  const dir = getExportsDirUri();
+  const uri = `${dir}${filename}`;
+  if (!uri.startsWith(dir) || uri.slice(dir.length) !== filename) return null;
+  try {
+    const info = await FileSystem.getInfoAsync(uri);
+    if (!info.exists || info.isDirectory) return null;
+    return uri;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -344,7 +459,7 @@ export async function listExportFiles(): Promise<ExportFileInfo[]> {
         ? (info as { modificationTime: number }).modificationTime * 1000
         : (parseTimestampMs(parsed.date, parsed.time) ?? 0);
     const size = typeof info.size === 'number' ? info.size : 0;
-    out.push({ filename, uri, ext: parsed.ext, size, modifiedAt });
+    out.push({ filename, uri, ext: parsed.ext, origin: parsed.origin, size, modifiedAt });
   }
 
   out.sort((a, b) => b.modifiedAt - a.modifiedAt || b.filename.localeCompare(a.filename));
@@ -401,7 +516,7 @@ export async function deleteExportFile(uri: string): Promise<void> {
  * or `null` if there was nothing to delete.
  */
 export async function deleteOldestExportFile(): Promise<ExportFileInfo | null> {
-  const files = await listExportFiles();
+  const files = (await listExportFiles()).filter((file) => file.origin !== 'auto');
   const oldest = files[files.length - 1] ?? null;
   if (oldest) {
     await deleteExportFile(oldest.uri);

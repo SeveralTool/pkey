@@ -12,33 +12,62 @@ import {
 import { AppState } from 'react-native';
 import type { EncryptedDatabase } from '../types';
 import type { LocaleStrings } from '../constants/localization';
-import { writeDatabaseToDisk as writeDbService } from '../services/storage';
 import { notifyWebClients } from '../services/webSyncNotify';
 import { syncAutofillCache } from '../services/autofill';
-import { commitVault } from '../services/vaultSecrets';
+import {
+  getLastPersistedDisk,
+  persistVaultDisk,
+  stageVault,
+  vaultForSync,
+} from '../services/vaultPersistence';
+import {
+  registerVaultPersist,
+  unregisterVaultPersist,
+  type VaultPersistOptions,
+} from '../services/vaultPersist';
+import { rememberPublicUiFromSettings } from '../utils/publicUiPrefs';
 import { notifications } from '../notifications/notificationRef';
 import { WRITE_DEBOUNCE_MS } from '../constants/writeDebounce';
 
-let flushPendingWriteRef: (() => Promise<void>) | null = null;
+let flushPendingWriteRef: (() => Promise<boolean>) | null = null;
+let inflightFlush: Promise<boolean> | null = null;
 
-/** Flushes any debounced vault write; safe to call before DatabaseProvider mounts. */
-export const flushPendingDatabaseWrite = (): Promise<void> =>
-  flushPendingWriteRef?.() ?? Promise.resolve();
+/**
+ * Flushes any debounced vault write; safe to call before DatabaseProvider mounts.
+ *
+ * A flush already writing an older snapshot does not count as this call.
+ * The registered writer waits for that pass and then writes anything staged
+ * in the meantime. Resolves `true` when nothing was pending or the latest
+ * snapshot reached disk, `false` when that latest write failed.
+ */
+export const flushPendingDatabaseWrite = (): Promise<boolean> => {
+  if (flushPendingWriteRef) return flushPendingWriteRef();
+  return inflightFlush ?? Promise.resolve(true);
+};
 
 export function useDebouncedVaultWrite(
   opts: Readonly<{
     isLogged: boolean;
-    db: EncryptedDatabase;
     masterPassword: string;
     setDb: Dispatch<SetStateAction<EncryptedDatabase>>;
     getT: () => LocaleStrings;
   }>
 ): {
-  writeDatabaseToDisk: (newDb: EncryptedDatabase, immediate?: boolean) => Promise<void>;
-  flushWriteDatabaseToDisk: () => Promise<void>;
+  /**
+   * Stages `newDb` and persists it (debounced, or immediately). Resolves `true`
+   * when the write is staged (debounced) or that snapshot reached disk
+   * (immediate); `false` when an immediate write failed — the UI state was
+   * restored and an alert shown, unless a newer snapshot was already staged.
+   */
+  writeDatabaseToDisk: (
+    newDb: EncryptedDatabase,
+    immediate?: boolean,
+    opts?: VaultPersistOptions
+  ) => Promise<boolean>;
+  flushWriteDatabaseToDisk: () => Promise<boolean>;
   lastPersistedDbRef: MutableRefObject<EncryptedDatabase | null>;
 } {
-  const { isLogged, db, masterPassword, setDb, getT } = opts;
+  const { isLogged, masterPassword, setDb, getT } = opts;
   const writeDebounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingDbRef = useRef<EncryptedDatabase | null>(null);
   const lastPersistedDbRef = useRef<EncryptedDatabase | null>(null);
@@ -55,45 +84,73 @@ export function useDebouncedVaultWrite(
       }
       return;
     }
-    if (!pendingDbRef.current && db?.version && !lastPersistedDbRef.current) {
-      lastPersistedDbRef.current = db;
+    if (!lastPersistedDbRef.current) {
+      const noted = getLastPersistedDisk();
+      if (noted) lastPersistedDbRef.current = noted;
     }
-  }, [isLogged, db]);
+  }, [isLogged]);
 
-  const flushWriteDatabaseToDisk = useCallback(async () => {
-    const pending = pendingDbRef.current;
-    if (!pending) return;
-    pendingDbRef.current = null;
-    if (writeDebounceRef.current) {
-      clearTimeout(writeDebounceRef.current);
-      writeDebounceRef.current = null;
-    }
-    try {
-      const { disk } = commitVault(pending);
-      await writeDbService(disk, masterPasswordRef.current);
-      lastPersistedDbRef.current = disk;
-      notifyWebClients();
-      void syncAutofillCache(disk.cards ?? []);
-    } catch (err) {
-      console.error('[DatabaseContext] writeDatabaseToDisk failed:', err);
-      if (lastPersistedDbRef.current) {
-        setDb(lastPersistedDbRef.current);
+  const flushWriteDatabaseToDisk = useCallback(
+    (opts?: VaultPersistOptions): Promise<boolean> => {
+      if (inflightFlush) {
+        // The in-flight pass already copied its snapshot. A newer pending
+        // vault must be written before this call can report success — callers
+        // such as device-secret unbind delete the hardware secret when the
+        // boolean is true.
+        return inflightFlush.then((ok) => {
+          if (!pendingDbRef.current) return ok;
+          return flushWriteDatabaseToDisk(opts);
+        });
       }
-      const t = getT();
-      notifications.alert({
-        title: t.filesystem_error_title,
-        message: t.filesystem_error_body,
-        variant: 'error',
+      const notify = opts?.notify !== false;
+      const run = (async (): Promise<boolean> => {
+        const pending = pendingDbRef.current;
+        if (!pending) return true;
+        pendingDbRef.current = null;
+        if (writeDebounceRef.current) {
+          clearTimeout(writeDebounceRef.current);
+          writeDebounceRef.current = null;
+        }
+        try {
+          await persistVaultDisk(pending, masterPasswordRef.current);
+          lastPersistedDbRef.current = pending;
+          void syncAutofillCache(pending.cards ?? []);
+          return true;
+        } catch (err) {
+          console.error('[DatabaseContext] writeDatabaseToDisk failed:', err);
+          // A newer snapshot was staged while this one was writing. Leave the
+          // UI on that snapshot; the follow-up flush reports its own result.
+          if (pendingDbRef.current) return false;
+          // A keystroke stages live disk without entering the debounce queue.
+          // That edit is newer than the snapshot this flush failed to write.
+          const live = vaultForSync();
+          if (!live || live === pending) {
+            const previous = lastPersistedDbRef.current ?? getLastPersistedDisk();
+            if (previous) {
+              const reverted = stageVault(previous);
+              lastPersistedDbRef.current = previous;
+              setDb(reverted.ui);
+              if (notify) notifyWebClients(reverted.disk);
+            }
+          } else if (notify) {
+            notifyWebClients(live);
+          }
+          const t = getT();
+          notifications.alert({
+            title: t.filesystem_error_title,
+            message: t.filesystem_error_body,
+            variant: 'error',
+          });
+          return false;
+        }
+      })();
+      inflightFlush = run.finally(() => {
+        inflightFlush = null;
       });
-    }
-  }, [setDb, getT]);
-
-  useEffect(() => {
-    flushPendingWriteRef = flushWriteDatabaseToDisk;
-    return () => {
-      flushPendingWriteRef = null;
-    };
-  }, [flushWriteDatabaseToDisk]);
+      return inflightFlush;
+    },
+    [setDb, getT]
+  );
 
   useEffect(() => {
     const sub = AppState.addEventListener('change', (state) => {
@@ -105,22 +162,40 @@ export function useDebouncedVaultWrite(
   }, [flushWriteDatabaseToDisk]);
 
   const writeDatabaseToDisk = useCallback(
-    async (newDb: EncryptedDatabase, immediate = false) => {
-      const { ui, disk } = commitVault(newDb);
+    async (
+      newDb: EncryptedDatabase,
+      immediate = false,
+      opts?: VaultPersistOptions
+    ): Promise<boolean> => {
+      const notify = opts?.notify !== false;
+      const { ui, disk } = stageVault(newDb);
       pendingDbRef.current = disk;
       setDb(ui);
-      notifyWebClients();
+      rememberPublicUiFromSettings(ui.settings);
+      if (notify) notifyWebClients(disk);
       if (writeDebounceRef.current) clearTimeout(writeDebounceRef.current);
       if (immediate) {
-        await flushWriteDatabaseToDisk();
-        return;
+        return flushWriteDatabaseToDisk({ notify });
       }
       writeDebounceRef.current = setTimeout(() => {
         void flushWriteDatabaseToDisk();
       }, WRITE_DEBOUNCE_MS);
+      return true;
     },
     [flushWriteDatabaseToDisk, setDb]
   );
+
+  useEffect(() => {
+    flushPendingWriteRef = () => flushWriteDatabaseToDisk();
+    registerVaultPersist({
+      schedule: (db, immediate, opts) => writeDatabaseToDisk(db, immediate, opts),
+      flush: () => flushWriteDatabaseToDisk(),
+    });
+    return () => {
+      flushPendingWriteRef = null;
+      unregisterVaultPersist();
+    };
+  }, [flushWriteDatabaseToDisk, writeDatabaseToDisk]);
 
   return { writeDatabaseToDisk, flushWriteDatabaseToDisk, lastPersistedDbRef };
 }

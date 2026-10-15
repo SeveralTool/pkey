@@ -1,6 +1,11 @@
 import { renderHook, act } from '@testing-library/react-native';
 import { useDebounce } from './useDebounce';
 
+interface DebounceProps {
+  value: string;
+  delay: number;
+}
+
 describe('useDebounce', () => {
   beforeEach(() => {
     jest.useFakeTimers();
@@ -11,16 +16,17 @@ describe('useDebounce', () => {
   });
 
   it('returns initial value immediately', () => {
-    const { result } = renderHook(({ value, delay }) => useDebounce(value, delay), {
+    const { result } = renderHook(({ value, delay }: DebounceProps) => useDebounce(value, delay), {
       initialProps: { value: 'a', delay: 300 },
     });
     expect(result.current).toBe('a');
   });
 
   it('updates after delay', () => {
-    const { result, rerender } = renderHook(({ value, delay }) => useDebounce(value, delay), {
-      initialProps: { value: 'a', delay: 300 },
-    });
+    const { result, rerender } = renderHook(
+      ({ value, delay }: DebounceProps) => useDebounce(value, delay),
+      { initialProps: { value: 'a', delay: 300 } }
+    );
 
     rerender({ value: 'ab', delay: 300 });
     expect(result.current).toBe('a');

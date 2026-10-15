@@ -9,6 +9,8 @@ import * as FileSystem from 'expo-file-system/legacy';
 import * as SecureStore from 'expo-secure-store';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { DATABASE_FILENAME } from '../constants/config';
+import { normalizePairingCode } from './migrationChannelCrypto';
+import { normalizeTlsFingerprint } from './tlsCredentials';
 
 export const PENDING_MIGRATION_FILENAME = 'pkey_migration_pending.json';
 export const PENDING_PAIRING_SECRET_KEY = 'pkey_migration_pairing_secret_v1';
@@ -28,6 +30,8 @@ export interface MigrationFinalizeTarget {
   readonly pairingSecret: string;
   readonly sessionId: string;
   readonly senderWipeProof: string;
+  /** Observed-pin target for the sender callback certificate. */
+  readonly senderTlsFingerprint: string;
 }
 
 /** Non-secret staging metadata plus reconstituted finalize target. */
@@ -44,6 +48,7 @@ interface PublicFinalizeTarget {
   readonly migrationId: string;
   readonly sessionId: string;
   readonly senderWipeProof: string;
+  readonly senderTlsFingerprint: string;
 }
 
 interface PublicPendingMeta {
@@ -79,12 +84,14 @@ function parsePublicTarget(value: unknown): {
   const migrationId = value.migrationId;
   const sessionId = value.sessionId;
   const senderWipeProof = value.senderWipeProof;
+  const senderTlsFingerprint = normalizeTlsFingerprint(value.senderTlsFingerprint);
   if (
     typeof senderIp !== 'string' ||
     typeof senderCallbackPort !== 'number' ||
     typeof migrationId !== 'string' ||
     typeof sessionId !== 'string' ||
-    typeof senderWipeProof !== 'string'
+    typeof senderWipeProof !== 'string' ||
+    !senderTlsFingerprint
   ) {
     return null;
   }
@@ -100,6 +107,7 @@ function parsePublicTarget(value: unknown): {
       migrationId,
       sessionId,
       senderWipeProof,
+      senderTlsFingerprint,
     },
     legacyPairingSecret: legacy,
   };
@@ -137,7 +145,13 @@ function toPublicTarget(target: MigrationFinalizeTarget): PublicFinalizeTarget {
     migrationId: target.migrationId,
     sessionId: target.sessionId,
     senderWipeProof: target.senderWipeProof,
+    senderTlsFingerprint: target.senderTlsFingerprint,
   };
+}
+
+function usablePairingSecret(value: string | null | undefined): string | null {
+  if (!value) return null;
+  return normalizePairingCode(value);
 }
 
 async function readPairingSecret(): Promise<string | null> {
@@ -170,7 +184,7 @@ async function persistStagedMeta(
   createdAt: number,
   target: MigrationFinalizeTarget | null
 ): Promise<void> {
-  await writePairingSecret(target?.pairingSecret ?? null);
+  await writePairingSecret(usablePairingSecret(target?.pairingSecret));
   await persistPublicMeta({
     cardCount,
     createdAt,
@@ -200,11 +214,16 @@ export async function readPendingMigrationMeta(): Promise<PendingMigrationMeta |
     const parsed = parsePublicMeta(raw);
     if (!parsed) return null;
 
-    let secret = await readPairingSecret();
+    const stored = await readPairingSecret();
+    let secret = usablePairingSecret(stored);
+    if (stored && !secret) {
+      await writePairingSecret(null);
+    }
+    const legacy = usablePairingSecret(parsed.legacyPairingSecret);
     if (parsed.legacyPairingSecret) {
-      if (!secret) {
-        await writePairingSecret(parsed.legacyPairingSecret);
-        secret = parsed.legacyPairingSecret;
+      if (legacy && !secret) {
+        await writePairingSecret(legacy);
+        secret = legacy;
       }
       await persistPublicMeta(parsed.meta);
     }

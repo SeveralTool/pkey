@@ -12,10 +12,12 @@ import {
   decryptVaultPayload,
   establishSessionFromPassword,
   resetNativeVaultProbeForTests,
+  DeviceSecretRequiredError,
   NativeKdfUnavailableError,
 } from './nativeVault';
+import { mixRootWithSecret } from './deviceSecret';
 import { isNativeAeadReady, isNativeKdfReady } from './nativeCryptoReady';
-import { clearSessionRootKey, hasSessionKeyMaterial } from './sessionKey';
+import { clearSessionRootKey, getSessionRootKey, hasSessionKeyMaterial } from './sessionKey';
 
 const mockCrypto = pkeyCrypto as typeof pkeyCrypto & {
   available: boolean;
@@ -178,6 +180,79 @@ describe('nativeVault password KDF', () => {
     expect(deriveSpy).not.toHaveBeenCalled();
     expect(mockCrypto.deriveRootKey).not.toHaveBeenCalled();
     deriveSpy.mockRestore();
+  });
+
+  describe('deviceBound envelope without a local device secret', () => {
+    const KIT_HEX = '0f1e2d3c4b5a69788796a5b4c3d2e1f0';
+    const plaintext = JSON.stringify({ ok: true, salt: SALT });
+    const unboundRoot = LocalCipher.deriveRootKey(PASSWORD, SALT);
+    const mixedRoot = mixRootWithSecret(unboundRoot, KIT_HEX);
+    const boundEnv = LocalCipher.encryptWithCachedRoot(plaintext, mixedRoot, SALT, {
+      deviceBound: true,
+    });
+
+    it('JS path: throws DeviceSecretRequiredError instead of reporting a wrong password', async () => {
+      await expect(decryptVaultPayload(PASSWORD, boundEnv)).rejects.toBeInstanceOf(
+        DeviceSecretRequiredError
+      );
+      await expect(decryptVaultPayload(PASSWORD, boundEnv)).rejects.toMatchObject({
+        reason: 'missing',
+      });
+      expect(hasSessionKeyMaterial()).toBe(false);
+    });
+
+    it('JS path: opens with the typed recovery kit and adopts the mixed root', async () => {
+      await expect(
+        decryptVaultPayload(PASSWORD, boundEnv, { deviceSecretHex: KIT_HEX })
+      ).resolves.toBe(plaintext);
+      expect(getSessionRootKey()?.rootKeyHex).toBe(mixedRoot);
+    });
+
+    it('JS path: a wrong kit is a plain failure, not a device-secret error', async () => {
+      await expect(
+        decryptVaultPayload(PASSWORD, boundEnv, { deviceSecretHex: 'ff'.repeat(16) })
+      ).resolves.toBe('');
+    });
+
+    it('native path: throws before any JS Argon2 and drops the unbound handle', async () => {
+      mockNativeKat();
+      mockCrypto.deriveRootKey.mockResolvedValue('handle-unbound');
+      mockCrypto.exportKey.mockResolvedValue(unboundRoot);
+      mockCrypto.decryptVault.mockImplementation(
+        async (_handle: string, _envelopeJson: string, aad: string) => {
+          if (aad === XCHACHA_KAT_AAD) return 'hello';
+          return null;
+        }
+      );
+      const deriveSpy = jest.spyOn(LocalCipher, 'deriveRootKey');
+      await expect(decryptVaultPayload(PASSWORD, boundEnv)).rejects.toBeInstanceOf(
+        DeviceSecretRequiredError
+      );
+      expect(deriveSpy).not.toHaveBeenCalled();
+      expect(mockCrypto.dropKey).toHaveBeenCalledWith('handle-unbound');
+      deriveSpy.mockRestore();
+    });
+
+    it('native path: the typed kit opens the vault through the mixed handle', async () => {
+      mockNativeKat();
+      mockCrypto.deriveRootKey.mockResolvedValue('handle-unbound');
+      mockCrypto.exportKey.mockImplementation(async (handle: string) =>
+        handle === 'handle-mixed' ? mixedRoot : unboundRoot
+      );
+      mockCrypto.importKey.mockImplementation(async (hex: string) =>
+        hex === mixedRoot ? 'handle-mixed' : 'kat-handle'
+      );
+      mockCrypto.decryptVault.mockImplementation(
+        async (handle: string, _envelopeJson: string, aad: string) => {
+          if (aad === XCHACHA_KAT_AAD) return 'hello';
+          return handle === 'handle-mixed' ? plaintext : null;
+        }
+      );
+      await expect(
+        decryptVaultPayload(PASSWORD, boundEnv, { deviceSecretHex: KIT_HEX })
+      ).resolves.toBe(plaintext);
+      expect(mockCrypto.deriveRootKey).toHaveBeenCalledTimes(1);
+    });
   });
 
   it('establishSessionFromPassword native path derives once', async () => {

@@ -8,8 +8,10 @@ import { AUTO_LOGOUT_1M_MS, INSTANT_RESUME_GRACE_MS } from '../utils/autoLogoutP
 import { setAndroidWebAccessKeepAlive } from '../utils/webAccessLock';
 import {
   beginExternalUiSession,
+  consumeSilentPwaHoldRelease,
   endExternalUiSession,
   isExternalUiSession,
+  setPwaResponseHold,
   suppressAutoLogout,
 } from '../utils/autoLogoutGuard';
 
@@ -44,6 +46,8 @@ describe('useBackgroundAutoLogout', () => {
   });
 
   afterEach(async () => {
+    setPwaResponseHold(false);
+    consumeSilentPwaHoldRelease();
     setAndroidWebAccessKeepAlive(false);
     let guard = 0;
     while (isExternalUiSession() && guard < 5) {
@@ -170,6 +174,19 @@ describe('useBackgroundAutoLogout', () => {
     renderHook(() => useBackgroundAutoLogout({ isLogged: true, autoLogout: 'NEVER', onLogout }));
     expect(AppState.addEventListener).not.toHaveBeenCalled();
     emit('background');
+    expect(onLogout).not.toHaveBeenCalled();
+  });
+
+  it('does not lock while a PWA phone prompt is in flight', () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(1_000_000);
+    setPwaResponseHold(true);
+    const onLogout = jest.fn();
+    renderHook(() => useBackgroundAutoLogout({ isLogged: true, autoLogout: 'INSTANT', onLogout }));
+    emit('background');
+    emit('inactive');
+    jest.setSystemTime(1_000_000 + INSTANT_RESUME_GRACE_MS + 5_000);
+    emit('active');
     expect(onLogout).not.toHaveBeenCalled();
   });
 

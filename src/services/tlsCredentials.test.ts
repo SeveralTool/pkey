@@ -26,9 +26,12 @@ import {
   TLS_CERT_STORE_KEY,
   TLS_KEY_STORE_KEY,
   TLS_SANS_STORE_KEY,
+  TLS_FINGERPRINT_HEX_LEN,
   clearTlsCredentialsCache,
   ensureTlsCredentials,
   fingerprintTlsCertificatePem,
+  normalizeTlsFingerprint,
+  tlsFingerprintsMatch,
 } from './tlsCredentials';
 import { defaultSans } from './tlsSans';
 
@@ -84,8 +87,26 @@ describe('fingerprintTlsCertificatePem', () => {
   it('is stable for a given PEM', () => {
     const a = fingerprintTlsCertificatePem(CERT_PEM);
     const b = fingerprintTlsCertificatePem(CERT_PEM);
-    expect(a).toHaveLength(16);
+    expect(a).toHaveLength(TLS_FINGERPRINT_HEX_LEN);
+    expect(a).toHaveLength(32);
     expect(a).toBe(b);
     expect(a).toMatch(/^[0-9A-F]+$/);
+  });
+});
+
+describe('tlsFingerprintsMatch', () => {
+  const pin = 'AB'.repeat(16);
+
+  it('matches only two identical 32-hex observations', () => {
+    expect(tlsFingerprintsMatch(pin, pin.toLowerCase())).toBe(true);
+    expect(normalizeTlsFingerprint(`  ${pin}  `)).toBe(pin);
+  });
+
+  it('rejects a missing observation, a missing declaration, and a short digest', () => {
+    expect(tlsFingerprintsMatch(null, pin)).toBe(false);
+    expect(tlsFingerprintsMatch(pin, '')).toBe(false);
+    expect(tlsFingerprintsMatch(pin, undefined)).toBe(false);
+    expect(tlsFingerprintsMatch('ABCD', 'ABCD')).toBe(false);
+    expect(tlsFingerprintsMatch(pin, 'CD'.repeat(16))).toBe(false);
   });
 });

@@ -10,6 +10,8 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { getRemainingSeconds, getTotpAtOffset, type OtpAlgorithm } from '@pkey/core';
+import type { LocaleStrings } from '../../constants/localization';
+import type { ThemeColors } from '../../styles/colors';
 import { globalStyles as styles } from '../../styles/globalStyles';
 
 export interface OtpCountdownProps {
@@ -18,8 +20,8 @@ export interface OtpCountdownProps {
   otpDigits?: 6 | 8;
   otpPeriod?: number;
   isDark: boolean;
-  c: Record<string, string>;
-  t: Record<string, string>;
+  c: ThemeColors;
+  t: LocaleStrings;
   onBiometricCheck: (onSuccess: () => void, prompt: string) => void;
   onCopyCode: (code: string) => void;
 }

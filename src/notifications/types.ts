@@ -55,7 +55,7 @@ export interface InAppNotificationItem {
   createdAt: number;
 }
 
-export type OsNotificationChannel = 'pkey-security' | 'pkey-actions';
+export type OsNotificationChannel = 'pkey-security' | 'pkey-actions' | 'pkey-backups';
 
 export interface OsNotificationPayload {
   id?: string;

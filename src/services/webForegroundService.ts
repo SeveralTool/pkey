@@ -1,8 +1,9 @@
 /**
  * @fileoverview Platform keep-alive helpers for the LAN web sync server.
  *
- * Android: sticky foreground service via `pkey-web-access` (OS requires an
- * ongoing notification while the service runs — kept minimal/silent).
+ * Android: foreground service via `pkey-web-access` while the task is alive
+ * (OS requires an ongoing notification — kept minimal/silent). Swiping PKEY
+ * away stops it in the native service.
  * iOS: UIBackgroundTask only (no sticky local notification).
  * Product OS alerts for new browser syncs are fired from SyncContext, not here.
  */

@@ -121,7 +121,9 @@ export const globalStyles = StyleSheet.create({
     lineHeight: 15,
   },
   primaryActActionButton: {
-    height: 48,
+    minHeight: 48,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
@@ -133,10 +135,14 @@ export const globalStyles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0.5,
+    flexShrink: 1,
+    textAlign: 'center',
   },
   secGhostOutlineButton: {
     borderWidth: 1,
-    height: 44,
+    minHeight: 44,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     borderRadius: 10,
     justifyContent: 'center',
     alignItems: 'center',
@@ -146,6 +152,8 @@ export const globalStyles = StyleSheet.create({
   secGhostOutlineText: {
     fontSize: 13,
     fontWeight: '600',
+    flexShrink: 1,
+    textAlign: 'center',
   },
   unifiedPanelHeaderFrame: {
     paddingHorizontal: 6,
@@ -496,8 +504,9 @@ export const globalStyles = StyleSheet.create({
   },
 
   statsPanelContainerScrollBody: {
-    padding: 16,
-    // paddingBottom is applied at runtime from estimateTabBarScrollPadding
+    paddingHorizontal: spacing.lg,
+    // paddingTop: status-bar inset + section pad (DashboardScrollView)
+    // paddingBottom: floating pill inset (estimateTabBarScrollPadding)
   },
   statsCategoryCardSection: {
     borderRadius: 16,
@@ -593,13 +602,29 @@ export const globalStyles = StyleSheet.create({
   },
   horizontalPillsSegmentControls: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
+    flexShrink: 1,
+    gap: 6,
+  },
+  /** Label above, pills on the next line, so long words are not clipped beside the copy. */
+  settingSegmentStack: {
+    flexDirection: 'column',
+    alignItems: 'flex-start',
+  },
+  /** Copy block inside a stacked row. Must not use `flex: 1` (that collapses height in a column). */
+  settingSegmentCopy: {
+    alignSelf: 'stretch',
+  },
+  segmentPillsWrap: {
+    alignSelf: 'stretch',
+    flexShrink: 0,
+    marginTop: 8,
   },
   segmentButtonOption: {
     borderWidth: 1,
     paddingHorizontal: 8,
-    paddingVertical: 5,
+    paddingVertical: 6,
     borderRadius: 6,
-    marginLeft: 6,
     minWidth: 40,
     alignItems: 'center',
   },
@@ -635,7 +660,7 @@ export const globalStyles = StyleSheet.create({
   },
   modalPresetIconBoxItem: {
     width: '30%',
-    aspectRatio: 1,
+    minHeight: 84,
     borderWidth: 1,
     borderRadius: 12,
     justifyContent: 'center',
@@ -647,5 +672,150 @@ export const globalStyles = StyleSheet.create({
     fontSize: 9,
     fontWeight: '700',
     marginTop: 4,
+  },
+
+  editorScreenBar: {
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  editorScreenBarRow: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.xs,
+  },
+  editorScreenBack: {
+    minWidth: 44,
+    minHeight: 44,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editorScreenTitle: {
+    flex: 1,
+    fontSize: 17,
+    fontWeight: '700',
+    marginRight: spacing.sm,
+  },
+  editorScrollContent: {
+    paddingHorizontal: spacing.lg,
+    paddingTop: spacing.md,
+  },
+  editorIdentityCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    padding: spacing.lg,
+    marginBottom: spacing.md,
+  },
+  editorIdentityRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  editorIdentityIcon: {
+    width: 44,
+    height: 44,
+    borderRadius: spacing.md,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  editorIdentityText: {
+    flex: 1,
+    minWidth: 0,
+    marginLeft: spacing.md,
+  },
+  editorIdentityTitle: {
+    fontSize: 18,
+    fontWeight: '800',
+  },
+  editorIdentityMeta: {
+    fontSize: 13,
+    marginTop: spacing.xs,
+  },
+  editorTypeChip: {
+    alignSelf: 'flex-start',
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: spacing.xs,
+    marginTop: spacing.md,
+    gap: spacing.xs,
+  },
+  editorTypeChipText: {
+    fontSize: 12,
+    fontWeight: '700',
+  },
+  editorLinkRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: spacing.sm,
+    gap: spacing.xs,
+    minHeight: 32,
+  },
+  editorLinkText: {
+    flex: 1,
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  editorSectionCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    overflow: 'hidden',
+  },
+  editorSectionHeader: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: spacing.md,
+  },
+  editorSectionHeading: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: spacing.sm,
+  },
+  editorSectionTitle: {
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  editorSectionSummary: {
+    fontSize: 12,
+    marginTop: 2,
+  },
+  editorSectionTagRow: {
+    marginTop: spacing.xs,
+    marginBottom: 0,
+  },
+  editorSectionBody: {
+    paddingBottom: spacing.md,
+  },
+  /** Out of flow so a closed clip (height 0) can still measure the body. */
+  editorSectionMeasure: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    top: 0,
+  },
+  editorFooterCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    marginBottom: spacing.sm,
+  },
+  editorLoadingCard: {
+    borderRadius: 14,
+    borderWidth: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl,
+    paddingHorizontal: spacing.lg,
+    marginBottom: spacing.sm,
+    minHeight: 96,
+  },
+  editorLoadingText: {
+    fontSize: 13,
+    marginTop: spacing.sm,
+    textAlign: 'center',
   },
 });

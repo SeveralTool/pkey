@@ -1,9 +1,18 @@
 /**
- * Expo config plugin — SSID readout without declaring location on Android 13+.
+ * Expo config plugin — Wi-Fi permissions without declaring location on Android 13+.
  *
- * Android 12 and below still need FINE/COARSE location to read the Wi-Fi name.
- * Android 13+ uses NEARBY_WIFI_DEVICES with neverForLocation so Play does not
- * treat a password manager as a location app for that feature.
+ * Android 12 and below need FINE/COARSE location to read the Wi-Fi name.
+ * Android 13+ declares NEARBY_WIFI_DEVICES with neverForLocation so Play does not
+ * treat a password manager as a location app.
+ *
+ * Trade-off (deliberate): on Android 13+ the SSID is still location-gated —
+ * `WifiInfo.getSSID()` requires the same permissions as `getScanResults()`
+ * (ACCESS_FINE_LOCATION) and otherwise returns `<unknown ssid>`. Because this
+ * plugin caps location at maxSdkVersion 32, the app cannot show the network
+ * name on Android 13+; `canReadWifiSsid()` in `src/utils/wifiSsidPermission.ts`
+ * hides that UI instead of requesting a permission that would not help. To
+ * show the SSID there, drop the cap and `neverForLocation` and accept the Play
+ * location declaration.
  *
  * Runs after the expo-location plugin so those permissions can be capped with
  * maxSdkVersion 32.

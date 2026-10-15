@@ -92,17 +92,22 @@ class AutofillCacheTest {
   fun legacyPlaintextIsMigratedToEncryptedOnRead() {
     // Simulate an older PKey build that wrote plaintext JSON.
     val legacy = File(context.filesDir, "pkey_autofill_cache.json")
-    val json = """[{"id":"leg","title":"Legacy","username":"u","password":"p","domains":[],"packages":[]}]"""
+    val json =
+      """[{"id":"leg","title":"Legacy","username":"u","password":"LEGACYPLAINTEXTSECRET","domains":["legacy.example"],"packages":[]}]"""
     legacy.writeText(json)
 
     val entries = AutofillCache.read(context)
 
     assertEquals(1, entries.size)
     assertEquals("Legacy", entries[0].title)
+    assertEquals("", entries[0].password)
+    assertEquals("", AutofillCache.passwordFor("leg"))
     // After the read the plaintext file must be gone and the encrypted one
-    // must exist.
+    // must exist, without the legacy secret.
     assertFalse(legacy.exists())
-    assertTrue(File(context.filesDir, "pkey_autofill_cache_v2.enc").exists())
+    val encFile = File(context.filesDir, "pkey_autofill_cache_v2.enc")
+    assertTrue(encFile.exists())
+    assertFalse(String(encFile.readBytes(), Charsets.ISO_8859_1).contains("LEGACYPLAINTEXTSECRET"))
   }
 
   @Test
@@ -121,9 +126,24 @@ class AutofillCacheTest {
   fun wipeSessionRemovesPasswordsFromMemory() {
     val json = """[{"id":"x","title":"T","username":"u","password":"hunter2","domains":[],"packages":[]}]"""
     AutofillCache.write(context, json)
+    val generation = AutofillCache.currentGeneration()
     assertEquals("hunter2", AutofillCache.passwordFor("x"))
+    assertEquals("hunter2", AutofillCache.passwordForSession("x", generation))
     AutofillCache.wipeSession(context)
     assertEquals("", AutofillCache.passwordFor("x"))
+    assertEquals("", AutofillCache.passwordForSession("x", generation))
+  }
+
+  @Test
+  fun wipeRememberedSessionClearsWithoutACallerContext() {
+    val json = """[{"id":"x","title":"T","username":"u","password":"hunter2","domains":["example.com"],"packages":[]}]"""
+    AutofillCache.write(context, json)
+    assertTrue(File(context.filesDir, "pkey_autofill_cache_v2.enc").exists())
+
+    AutofillCache.wipeRememberedSession()
+
+    assertEquals("", AutofillCache.passwordFor("x"))
+    assertFalse(File(context.filesDir, "pkey_autofill_cache_v2.enc").exists())
   }
 
   @Test
@@ -145,5 +165,26 @@ class AutofillCacheTest {
 
     val hostRegistrable = AutofillCache.match(entries, "www.example5.com", null)
     assertEquals("id-5", hostRegistrable[0].id)
+  }
+
+  @Test
+  fun matchRejectsTitleAndPublicSuffixSiblings() {
+    val paypal = CacheEntry("pp", "PayPal", "u", "secret", listOf("paypal.com"), emptyList())
+    val pages = CacheEntry("gh", "Foo", "u", "secret", listOf("foo.github.io"), emptyList())
+    val bbc = CacheEntry("bbc", "BBC", "u", "secret", listOf("bbc.co.uk"), emptyList())
+
+    assertTrue(
+      AutofillCache.match(listOf(paypal), "paypal.evil.com", "com.android.chrome").isEmpty(),
+    )
+    assertTrue(AutofillCache.match(listOf(paypal), "pay.evil.com", null).isEmpty())
+    assertTrue(AutofillCache.match(listOf(paypal), "notpaypal.com", null).isEmpty())
+    assertEquals("pp", AutofillCache.match(listOf(paypal), "paypal.com", null)[0].id)
+    assertEquals("pp", AutofillCache.match(listOf(paypal), "login.paypal.com", null)[0].id)
+
+    assertTrue(AutofillCache.match(listOf(pages), "bar.github.io", null).isEmpty())
+    assertEquals("gh", AutofillCache.match(listOf(pages), "foo.github.io", null)[0].id)
+
+    assertEquals("bbc", AutofillCache.match(listOf(bbc), "news.bbc.co.uk", null)[0].id)
+    assertTrue(AutofillCache.match(listOf(bbc), "other.co.uk", null).isEmpty())
   }
 }

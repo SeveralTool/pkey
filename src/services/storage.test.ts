@@ -1,6 +1,7 @@
 /**
  * @fileoverview Encrypted vault file I/O (session key vs master-password wrap).
  */
+import { DEFAULT_VAULT_SETTINGS } from '@pkey/core';
 
 const mockFileStore = new Map<string, string>();
 const mockAsyncStore = new Map<string, string>();
@@ -20,6 +21,12 @@ jest.mock('expo-file-system/legacy', () => ({
   deleteAsync: jest.fn(async (uri: string) => {
     mockFileStore.delete(uri);
   }),
+  moveAsync: jest.fn(async ({ from, to }: { from: string; to: string }) => {
+    const value = mockFileStore.get(from);
+    if (value == null) throw new Error('ENOENT');
+    mockFileStore.set(to, value);
+    mockFileStore.delete(from);
+  }),
 }));
 
 jest.mock('@react-native-async-storage/async-storage', () => ({
@@ -32,7 +39,7 @@ jest.mock('@react-native-async-storage/async-storage', () => ({
   }),
 }));
 
-const mockDiscardPendingMigration = jest.fn(async () => undefined);
+const mockDiscardPendingMigration = jest.fn(async (..._args: unknown[]) => undefined);
 jest.mock('./migrationPendingVault', () => ({
   discardPendingMigration: (...args: unknown[]) => mockDiscardPendingMigration(...args),
 }));
@@ -52,21 +59,22 @@ import {
   destroyDatabase,
   readEncryptedPayload,
   resetLegacyStorageMigrationForTests,
+  VAULT_TMP_SUFFIX,
   writeDatabaseToDisk,
 } from './storage';
 import type { EncryptedDatabase } from '../types';
 
 const VAULT_URI = 'file:///docs/pkey_encrypted_db.json';
 
-const db = {
+const db: EncryptedDatabase = {
   version: 1,
   creation_date: '2026-01-01',
   last_update: '2026-01-01',
   passwordHash: 'hash',
   salt: 'aabbccdd',
-  settings: {},
+  settings: DEFAULT_VAULT_SETTINGS,
   cards: [],
-} as EncryptedDatabase;
+};
 
 beforeEach(() => {
   mockFileStore.clear();
@@ -101,6 +109,33 @@ describe('storage', () => {
     await writeDatabaseToDisk(db, 'master-pass');
     expect(LocalCipher.encrypt).toHaveBeenCalledWith(expect.any(String), 'master-pass', db.salt);
     expect(mockFileStore.get(VAULT_URI)).toBe('wrapped-with-password');
+  });
+
+  it('writes through a temp file and renames, leaving no temp behind', async () => {
+    setSessionRootKey('root-hex', 'salt-hex');
+    await writeDatabaseToDisk(db, '');
+    expect(FileSystem.writeAsStringAsync).toHaveBeenCalledWith(
+      `${VAULT_URI}${VAULT_TMP_SUFFIX}`,
+      'wrapped-with-session',
+      { encoding: 'utf8' }
+    );
+    expect(FileSystem.moveAsync).toHaveBeenCalledWith({
+      from: `${VAULT_URI}${VAULT_TMP_SUFFIX}`,
+      to: VAULT_URI,
+    });
+    expect(mockFileStore.has(`${VAULT_URI}${VAULT_TMP_SUFFIX}`)).toBe(false);
+    expect(mockFileStore.get(VAULT_URI)).toBe('wrapped-with-session');
+  });
+
+  it('keeps the previous vault when the temp write dies and still persists via fallback', async () => {
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    mockFileStore.set(VAULT_URI, 'previous-vault');
+    setSessionRootKey('root-hex', 'salt-hex');
+    jest.mocked(FileSystem.moveAsync).mockRejectedValueOnce(new Error('EXDEV'));
+    await writeDatabaseToDisk(db, '');
+    expect(mockFileStore.get(VAULT_URI)).toBe('wrapped-with-session');
+    expect(mockFileStore.has(`${VAULT_URI}${VAULT_TMP_SUFFIX}`)).toBe(false);
+    warnSpy.mockRestore();
   });
 
   it('reads the encrypted payload from disk', async () => {

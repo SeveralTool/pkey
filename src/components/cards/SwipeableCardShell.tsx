@@ -54,10 +54,6 @@ export const SwipeableCardShell: React.FC<SwipeableCardShellProps> = ({
     [closeSwipe, onSwipeLeft, onSwipeRight]
   );
 
-  if (Platform.OS === 'web') {
-    return <View style={globalStyles.cardListItemShell}>{children}</View>;
-  }
-
   const renderLeftActions = useCallback(
     () => (
       <View style={[styles.actionPane, { width: ACTION_WIDTH, backgroundColor: successColor }]}>
@@ -81,6 +77,11 @@ export const SwipeableCardShell: React.FC<SwipeableCardShellProps> = ({
     ),
     [dangerColor]
   );
+
+  // Hooks above run unconditionally; only the render output branches on platform.
+  if (Platform.OS === 'web') {
+    return <View style={globalStyles.cardListItemShell}>{children}</View>;
+  }
 
   return (
     <Swipeable

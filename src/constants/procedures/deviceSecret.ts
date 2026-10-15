@@ -24,7 +24,8 @@ CÓMO ACTIVARLO
 CÓMO USARLO
 
 • En este teléfono: la contraseña maestra o la biometría siguen alcanzando. El secreto queda en el hardware del aparato.
-• En otro teléfono, al restaurar un .pkey o tras migrar: necesitás la contraseña maestra y el kit. Sin el kit el archivo no se abre; puede parecer que la contraseña está mal.
+• En otro teléfono, al restaurar un .pkey o tras migrar: necesitás la contraseña maestra y el kit. Después de la contraseña, PKEY pide el kit; una vez abierta la bóveda, lo guarda en el hardware de ese teléfono y no vuelve a pedirlo.
+• Cambiar la huella o el rostro registrados en este teléfono no desactiva el secreto. Si una versión anterior de PKEY lo perdió por eso, el inicio pide el kit una sola vez.
 • CSV y JSON en claro tampoco usan el kit.
 
 SI LO PERDÉS
@@ -47,7 +48,8 @@ HOW TO TURN IT ON
 HOW TO USE IT
 
 • On this phone: the master password or biometrics still unlock. The secret stays in this device’s hardware.
-• On another phone, when restoring a .pkey or after migration: you need the master password and the kit. Without the kit the file will not open; it can look like the password is wrong.
+• On another phone, when restoring a .pkey or after migration: you need the master password and the kit. After the password, PKEY asks for the kit; once the vault opens, it stores the secret in that phone's hardware and does not ask again.
+• Changing the enrolled fingerprint or face on this phone does not disable the secret. If an older PKEY version lost it that way, unlock asks for the kit once.
 • Unencrypted CSV and JSON do not use the kit either.
 
 IF YOU LOSE IT

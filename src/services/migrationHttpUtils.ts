@@ -25,7 +25,8 @@ export type HttpParseResult =
   | { ok: false; incomplete: true }
   | { ok: false; incomplete: false; status: number; code: string; msg: string };
 
-const parseContentLength = (headers: Record<string, string>): number | 'invalid' | 'missing' => {
+/** Absent header counts as a zero-length body; only malformed values are rejected. */
+const parseContentLength = (headers: Record<string, string>): number | 'invalid' => {
   const raw = headers['content-length'];
   if (raw === undefined || raw === '') return 0;
   if (!/^\d+$/.test(raw)) return 'invalid';

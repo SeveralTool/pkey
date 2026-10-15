@@ -1,7 +1,7 @@
 /**
  * @fileoverview Phone-side SAS + biometrics when the LAN PWA asks to unlock.
  */
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, AppState, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSync } from '../../context/SyncContext';
@@ -21,6 +21,8 @@ export const UnlockPhoneModal = () => {
   } = useSync();
   const { isLogged } = useCoreState();
   const { c, t } = useSettings();
+  const startedForRef = useRef<string | null>(null);
+  const wasLoggedRef = useRef(isLogged);
 
   const visible = !!unlockPrompt;
   const prompt = unlockPrompt;
@@ -36,11 +38,22 @@ export const UnlockPhoneModal = () => {
     : t.web_client_unknown;
   const message = t.web_unlock_message.replace('{client}', clientLabel);
 
-  // Foreground + already unlocked: start bio for a new request (PWA retry).
-  // No AppState listener — Recents should show the SAS before Approve.
+  // One automatic biometric per request. Later callback identity changes
+  // (password modal cancel re-renders auth) must not open the prompt again.
+  // Background: the notification router starts auth on tap. Recents: the SAS
+  // stays up until Approve. A vault unlock that just happened is the router's
+  // job, after the login biometric has dismissed.
   useEffect(() => {
-    if (!prompt || !isLogged) return;
-    if (AppState.currentState !== 'active') return;
+    const justUnlocked = isLogged && !wasLoggedRef.current;
+    wasLoggedRef.current = isLogged;
+    if (!prompt) {
+      startedForRef.current = null;
+      return;
+    }
+    if (!isLogged) return;
+    if (startedForRef.current === prompt.requestId) return;
+    startedForRef.current = prompt.requestId;
+    if (justUnlocked || AppState.currentState !== 'active') return;
     beginUnlockAuth();
   }, [prompt, isLogged, beginUnlockAuth]);
 
@@ -115,6 +128,8 @@ export const UnlockPhoneModal = () => {
 
       <TouchableOpacity
         onPress={() => resolveUnlock(false)}
+        accessibilityRole="button"
+        accessibilityLabel={t.web_unlock_deny}
         style={{ paddingVertical: 10, paddingHorizontal: 16 }}
       >
         <Text style={{ color: c.danger, fontWeight: '700', textAlign: 'center' }}>

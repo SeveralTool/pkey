@@ -12,7 +12,12 @@ public class PkeyVaultKeysModule: Module {
     Name("PkeyVaultKeys")
 
     AsyncFunction("storeUnlockBundle") { (json: String, promptTitle: String) in
-      try self.storeKeychain(account: self.bundleAccount, data: Data(json.utf8), prompt: promptTitle)
+      try self.storeKeychain(
+        account: self.bundleAccount,
+        data: Data(json.utf8),
+        prompt: promptTitle,
+        flags: .biometryCurrentSet
+      )
     }
 
     AsyncFunction("loadUnlockBundle") { (promptTitle: String) -> String? in
@@ -43,7 +48,16 @@ public class PkeyVaultKeysModule: Module {
       guard let data = Self.hexToData(hex) else {
         throw Exception(name: "E_HEX", description: "Invalid device secret hex")
       }
-      try self.storeKeychain(account: self.secretAccount, data: data, prompt: promptTitle)
+      // `.biometryAny`, not `.biometryCurrentSet`: the device secret is the only
+      // on-device copy of the vault binding secret. Adding or removing a finger /
+      // face must not make the vault need the recovery kit on this same phone.
+      // Reads still require biometrics (`deviceOwnerAuthenticationWithBiometrics`).
+      try self.storeKeychain(
+        account: self.secretAccount,
+        data: data,
+        prompt: promptTitle,
+        flags: .biometryAny
+      )
     }
 
     AsyncFunction("loadDeviceSecret") { (promptTitle: String) -> String? in
@@ -62,12 +76,12 @@ public class PkeyVaultKeysModule: Module {
     }
   }
 
-  private func accessControl() throws -> SecAccessControl {
+  private func accessControl(flags: SecAccessControlCreateFlags) throws -> SecAccessControl {
     var error: Unmanaged<CFError>?
     guard let access = SecAccessControlCreateWithFlags(
       nil,
       kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-      .biometryCurrentSet,
+      flags,
       &error
     ) else {
       throw Exception(name: "E_ACCESS", description: error?.takeRetainedValue().localizedDescription ?? "access control")
@@ -75,9 +89,15 @@ public class PkeyVaultKeysModule: Module {
     return access
   }
 
-  private func storeKeychain(account: String, data: Data, prompt: String) throws {
+  /// `SecItemAdd` does not prompt; `prompt` is only shown on read (`loadKeychain`).
+  private func storeKeychain(
+    account: String,
+    data: Data,
+    prompt: String,
+    flags: SecAccessControlCreateFlags
+  ) throws {
     deleteKeychain(account: account)
-    let access = try accessControl()
+    let access = try accessControl(flags: flags)
     let query: [String: Any] = [
       kSecClass as String: kSecClassGenericPassword,
       kSecAttrService as String: service,
@@ -112,6 +132,9 @@ public class PkeyVaultKeysModule: Module {
     var item: CFTypeRef?
     let status = SecItemCopyMatching(query as CFDictionary, &item)
     if status == errSecItemNotFound { return nil }
+    if status == errSecUserCanceled {
+      throw Exception(name: "E_USER_CANCELED", description: "SecItemCopyMatching canceled")
+    }
     if status != errSecSuccess {
       throw Exception(name: "E_LOAD", description: "SecItemCopyMatching \(status)")
     }

@@ -7,15 +7,11 @@ import { View, Text, TouchableOpacity } from 'react-native';
 import { useCoreState } from '../../context/CoreStateContext';
 import { useSettings } from '../../context/SettingsContext';
 import { globalStyles as styles } from '../../styles/globalStyles';
+import { ACCENT_SELECTED_ALPHA, withAlpha } from '../../styles/colors';
 import { SettingsSectionCard } from '../common';
 import type { AppSettings } from '../../types';
 
 type ViewMode = 'app' | 'web';
-
-const truncateText = (text: string, maxLength: number = 5): string => {
-  if (text.length <= maxLength) return text;
-  return text.substring(0, maxLength) + '…';
-};
 
 interface SegmentOptionRowProps {
   label: string;
@@ -27,7 +23,6 @@ interface SegmentOptionRowProps {
   borderColor: string;
   textColor: string;
   mutedColor: string;
-  truncateTo?: number;
 }
 
 const SegmentOptionRow: React.FC<SegmentOptionRowProps> = React.memo(
@@ -41,13 +36,9 @@ const SegmentOptionRow: React.FC<SegmentOptionRowProps> = React.memo(
     borderColor,
     textColor,
     mutedColor,
-    truncateTo = 15,
   }) => (
     <View
-      style={[
-        styles.settingInterativeRowSelectorContainer,
-        { borderBottomColor: borderColor },
-      ]}
+      style={[styles.settingInterativeRowSelectorContainer, { borderBottomColor: borderColor }]}
     >
       <View style={styles.settingTextGroupingLeftColumn}>
         <Text style={[styles.settingRowLabelBoldTitle, { color: textColor }]}>{label}</Text>
@@ -60,15 +51,20 @@ const SegmentOptionRow: React.FC<SegmentOptionRowProps> = React.memo(
           const selected = currentValue === option.value;
           return (
             <TouchableOpacity
-              key={idx}
+              key={option.value}
               style={[
                 styles.segmentButtonOption,
                 {
                   borderColor: selected ? accentColor : borderColor,
-                  backgroundColor: selected ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                  backgroundColor: selected
+                    ? withAlpha(accentColor, ACCENT_SELECTED_ALPHA)
+                    : 'transparent',
                 },
               ]}
               onPress={() => onValueChange(option.value)}
+              accessibilityRole="button"
+              accessibilityState={{ selected }}
+              accessibilityLabel={option.label}
             >
               <Text
                 style={[
@@ -79,14 +75,14 @@ const SegmentOptionRow: React.FC<SegmentOptionRowProps> = React.memo(
                   },
                 ]}
               >
-                {truncateText(option.label, truncateTo)}
+                {option.label}
               </Text>
             </TouchableOpacity>
           );
         })}
       </View>
     </View>
-  ),
+  )
 );
 SegmentOptionRow.displayName = 'SegmentOptionRow';
 
@@ -102,9 +98,7 @@ export const AppearanceSettingsSection: React.FC = () => {
 
   const isWeb = viewMode === 'web';
 
-  const themeCurrent = isWeb
-    ? (db.settings.webTheme ?? db.settings.theme)
-    : db.settings.theme;
+  const themeCurrent = isWeb ? (db.settings.webTheme ?? db.settings.theme) : db.settings.theme;
 
   const languageCurrent = isWeb
     ? (db.settings.webLanguage ?? db.settings.language)
@@ -115,7 +109,7 @@ export const AppearanceSettingsSection: React.FC = () => {
       const key: 'theme' | 'webTheme' = isWeb ? 'webTheme' : 'theme';
       handleToggleSettingsOption(key, value as AppSettings['theme']);
     },
-    [isWeb, handleToggleSettingsOption],
+    [isWeb, handleToggleSettingsOption]
   );
 
   const handleLanguageChange = useCallback(
@@ -123,7 +117,7 @@ export const AppearanceSettingsSection: React.FC = () => {
       const key: 'language' | 'webLanguage' = isWeb ? 'webLanguage' : 'language';
       handleToggleSettingsOption(key, value as AppSettings['language']);
     },
-    [isWeb, handleToggleSettingsOption],
+    [isWeb, handleToggleSettingsOption]
   );
 
   const settingRowStyle = [
@@ -144,7 +138,7 @@ export const AppearanceSettingsSection: React.FC = () => {
                 {
                   borderColor: viewMode === mode ? c.accent : c.border,
                   backgroundColor:
-                    viewMode === mode ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                    viewMode === mode ? withAlpha(c.accent, ACCENT_SELECTED_ALPHA) : 'transparent',
                 },
               ]}
               onPress={() => setViewMode(mode)}
@@ -192,7 +186,6 @@ export const AppearanceSettingsSection: React.FC = () => {
         borderColor={c.border}
         textColor={c.text}
         mutedColor={c.textMuted}
-        truncateTo={10}
       />
     </SettingsSectionCard>
   );

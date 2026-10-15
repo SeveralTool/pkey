@@ -2,7 +2,7 @@
 
 ## WHAT THIS SECTION DOES
 
-Here you can save an encrypted backup of your vault on the phone, or share keys as unencrypted CSV/JSON. `.pkey` files stay in PKEY’s Exports folder: they are not part of the open vault, and you can delete them when you no longer need them. CSV and JSON are not kept on the phone.
+Here you can save an encrypted backup of your vault on the phone, or share keys as unencrypted CSV/JSON. `.pkey` files stay in Security, under Backup & export: they are not part of the open vault, and you can delete them when you no longer need them. CSV and JSON are not kept on the phone.
 
 ## WHAT EACH FORMAT INCLUDES
 
@@ -32,8 +32,16 @@ The local file button creates an encrypted backup (`.pkey`). This is the safest 
 
 1. Tap “Create local file (.pkey)”.
 2. The app will ask for biometrics or your master password.
-3. It saves the file under Exports and opens the share sheet (Drive, Files, etc.).
+3. It saves the file in the Backup section and opens the share sheet (Drive, Files, etc.).
 4. Store it somewhere you trust. To load it again, use Import / restore.
+
+## AUTOMATIC BACKUP (OPT-IN)
+
+The switch starts off. If you turn it on, PKEY copies the same encrypted `.pkey` into the Backup section, in Security (you do not pick another folder) on the interval you choose: 1 minute, 24 hours, or 7 days (the default is 24 hours), even if you did not change the vault. On Android, 1 minute keeps copying after you leave PKEY while the phone is on: a silent notice appears so the system does not freeze the app. If you swipe PKEY away, or on iPhone, the system will not copy more often than every 15 minutes (on iPhone, when iOS decides) and 1 minute catches up when you open the app again. A powered-off phone does not run a copy. It keeps at most 3 automatic files, separate from the 10 manual ones.
+
+- An optional alert lets you share the file (Drive, Files, and so on). If you ignore the alert or deny notifications, the `.pkey` still stays in the Backup section.
+- Automatic backup does not replace keeping a copy off the phone: sharing is still how the file leaves the device.
+- If device secret is on, that copy also needs the recovery kit on another phone.
 
 ## DEVICE SECRET (OPTIONAL)
 

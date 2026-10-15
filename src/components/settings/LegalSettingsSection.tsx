@@ -9,9 +9,10 @@ import { useSettings } from '../../context/SettingsContext';
 import { globalStyles as styles } from '../../styles/globalStyles';
 import { SettingsSectionCard } from '../common';
 import { LEGAL_DOCUMENT_IDS, type LegalDocumentId } from '../../constants/legalContent';
+import type { LocaleStrings } from '../../constants/localization';
 import { LegalDocumentModal } from './LegalDocumentModal';
 
-const TITLE_KEYS: Record<LegalDocumentId, string> = {
+const TITLE_KEYS: Record<LegalDocumentId, keyof LocaleStrings> = {
   privacy: 'legal_privacy_title',
   terms: 'legal_terms_title',
   third_party: 'legal_third_party_title',
@@ -19,7 +20,7 @@ const TITLE_KEYS: Record<LegalDocumentId, string> = {
   source_license: 'legal_source_title',
 };
 
-const SUBTITLE_KEYS: Partial<Record<LegalDocumentId, string>> = {
+const SUBTITLE_KEYS: Partial<Record<LegalDocumentId, keyof LocaleStrings>> = {
   privacy: 'legal_privacy_desc',
   terms: 'legal_terms_desc',
   third_party: 'legal_third_party_desc',
@@ -54,20 +55,23 @@ export const LegalSettingsSection: React.FC = () => {
           return (
             <TouchableOpacity
               key={id}
-              style={[styles.settingInterativeRowSelectorContainer, { borderBottomColor: c.border }]}
+              style={[
+                styles.settingInterativeRowSelectorContainer,
+                { borderBottomColor: c.border },
+              ]}
               onPress={() => setActiveDoc(id)}
               accessibilityRole="button"
-              accessibilityLabel={String((t as Record<string, string>)[titleKey])}
+              accessibilityLabel={String(t[titleKey])}
             >
               <View style={{ flexDirection: 'row', alignItems: 'center', flex: 1, gap: 12 }}>
                 <Ionicons name={ICONS[id]} size={22} color={c.accent} />
                 <View style={styles.settingTextGroupingLeftColumn}>
                   <Text style={[styles.settingRowLabelBoldTitle, { color: c.text }]}>
-                    {(t as Record<string, string>)[titleKey]}
+                    {String(t[titleKey])}
                   </Text>
                   {subtitleKey ? (
                     <Text style={[styles.settingRowMutedSubTextDesc, { color: c.textMuted }]}>
-                      {(t as Record<string, string>)[subtitleKey]}
+                      {String(t[subtitleKey])}
                     </Text>
                   ) : null}
                 </View>
@@ -86,7 +90,9 @@ export const LegalSettingsSection: React.FC = () => {
           <Text style={[styles.settingRowLabelBoldTitle, { color: c.text }]}>
             {t.legal_app_version}
           </Text>
-          <Text style={[styles.settingRowMutedSubTextDesc, { color: c.textMuted }]}>{appVersion}</Text>
+          <Text style={[styles.settingRowMutedSubTextDesc, { color: c.textMuted }]}>
+            {appVersion}
+          </Text>
         </View>
       </SettingsSectionCard>
 

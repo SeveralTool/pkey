@@ -2,47 +2,42 @@
  * @fileoverview Lightweight collapsed header for vault list rows.
  */
 import React from 'react';
-import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { Ionicons } from '@expo/vector-icons';
 import type { PasswordCard } from '../../types';
+import type { LocaleStrings } from '../../constants/localization';
+import type { ThemeColors } from '../../styles/colors';
 import { globalStyles as styles, spacing } from '../../styles/globalStyles';
 import { getDisplayUrl } from '../../utils/openExternalLink';
 import { AutoDetectIcon } from '../common/AutoDetectIcon';
 import { CardTagChips } from './CardTagChips';
 import { usePressScale } from '../../hooks';
-import {
-  collapsedSubtitleText,
-  type CollapsedSubtitleMode,
-} from './collapsedSubtitle';
+import { collapsedSubtitleText, type CollapsedSubtitleMode } from './collapsedSubtitle';
 
 export type { CollapsedSubtitleMode };
 
 export type CardCollapsedHeaderProps = {
   item: PasswordCard;
-  isExpanded: boolean;
-  bodyLoading: boolean;
   isDark: boolean;
-  c: Record<string, string>;
-  t: Record<string, string>;
+  c: ThemeColors;
+  t: LocaleStrings;
   isOpeningLink: boolean;
   /** `username` for grouped members so collapsed rows are distinguishable. Default `link`. */
   subtitleMode?: CollapsedSubtitleMode;
-  onToggleExpand: () => void;
+  onOpen: () => void;
   onOpenLink: () => void;
   onSetCustomIconModal: (modal: { visible: boolean; cardId: string | null }) => void;
 };
 
 export const CardCollapsedHeader = React.memo(function CardCollapsedHeader({
   item,
-  isExpanded,
-  bodyLoading,
   isDark,
   c,
   t,
   isOpeningLink,
   subtitleMode = 'link',
-  onToggleExpand,
+  onOpen,
   onOpenLink,
   onSetCustomIconModal,
 }: CardCollapsedHeaderProps) {
@@ -78,12 +73,9 @@ export const CardCollapsedHeader = React.memo(function CardCollapsedHeader({
         style={styles.cardHeaderOuterRowClickable}
         onPressIn={onHeaderPressIn}
         onPressOut={onHeaderPressOut}
-        onPress={onToggleExpand}
+        onPress={onOpen}
         accessibilityRole="button"
-        accessibilityState={{ expanded: isExpanded }}
-        accessibilityLabel={
-          showUsernameSubtitle ? `${truncatedTitle}, ${subtitle}` : undefined
-        }
+        accessibilityLabel={t.card_open_a11y.replace('{title}', truncatedTitle)}
       >
         <TouchableOpacity
           style={[
@@ -144,20 +136,12 @@ export const CardCollapsedHeader = React.memo(function CardCollapsedHeader({
           />
         </View>
 
-        {bodyLoading ? (
-          <ActivityIndicator
-            size="small"
-            color={c.textMuted}
-            style={{ alignSelf: 'center', marginHorizontal: spacing.sm }}
-          />
-        ) : (
-          <Ionicons
-            name={isExpanded ? 'chevron-up-outline' : 'chevron-down-outline'}
-            size={18}
-            color={c.textMuted}
-            style={{ alignSelf: 'center', marginHorizontal: spacing.sm }}
-          />
-        )}
+        <Ionicons
+          name="chevron-forward-outline"
+          size={18}
+          color={c.textMuted}
+          style={{ alignSelf: 'center', marginHorizontal: spacing.sm }}
+        />
       </TouchableOpacity>
     </Animated.View>
   );

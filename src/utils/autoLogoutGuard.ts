@@ -12,6 +12,13 @@ import { AppState, type AppStateStatus } from 'react-native';
 let suppressUntil = 0;
 let externalUiDepth = 0;
 let backgroundLockHandler: (() => void) | null = null;
+/** In-flight PWA unlock / action-confirm. Auto-lock must not drop that ECDH session. */
+let pwaResponseHold = false;
+/**
+ * Set when vault lock itself clears the prompt, so the hold-release effect does
+ * not start a second logout.
+ */
+let silentPwaHoldRelease = false;
 
 /**
  * Grace window granted to QR scanner overlays / OTP setup flows before the
@@ -36,6 +43,38 @@ export function suppressAutoLogout(ms = 120_000): void {
 /** True while a {@link suppressAutoLogout} window is still open. */
 export function isAutoLogoutSuppressed(): boolean {
   return Date.now() < suppressUntil;
+}
+
+/**
+ * True while a PWA unlock or action-confirm is waiting on this phone.
+ * Background and idle auto-lock must not run: locking tears down the LAN
+ * server and the in-memory grant, so the notification the user is answering
+ * comes back as "expired".
+ */
+export function isPwaResponseHold(): boolean {
+  return pwaResponseHold;
+}
+
+/** Marks a live PWA phone prompt. Pass `false` when the prompt is gone. */
+export function setPwaResponseHold(active: boolean): void {
+  if (active) silentPwaHoldRelease = false;
+  pwaResponseHold = active;
+}
+
+/**
+ * Drops the hold without asking auto-lock to run. Vault lock already stops
+ * the server; a second logout from the hold-release effect would re-enter.
+ */
+export function silencePwaHoldRelease(): void {
+  silentPwaHoldRelease = true;
+  pwaResponseHold = false;
+}
+
+/** @returns true once after {@link silencePwaHoldRelease}, then clears the flag. */
+export function consumeSilentPwaHoldRelease(): boolean {
+  const silent = silentPwaHoldRelease;
+  silentPwaHoldRelease = false;
+  return silent;
 }
 
 /** Registers the lock callback used when an external UI session ends in the background. */

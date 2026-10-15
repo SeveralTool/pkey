@@ -34,8 +34,13 @@ import { LinkGroupCard } from './LinkGroupCard';
 import type { CollapsedSubtitleMode } from './collapsedSubtitle';
 import { globalStyles as styles, spacing } from '../../styles/globalStyles';
 import { estimateCardsListBottomPadding, estimateFabBottom } from '../../navigation/tabBarInset';
-import { buildDuplicateIndices } from '../../hooks/useCardAnalysis';
-import { cardsWithVaultSecrets } from '../../services/vaultSecrets';
+import { SCROLL_MOMENTUM_VELOCITY } from '../../navigation/scrollActivity';
+import { useParkScrollOnBlur } from '../../navigation/useParkScrollOnBlur';
+import {
+  estimateEdgeToEdgeTopPadding,
+  useDashboardTopInsetConsumed,
+} from '../../navigation/dashboardTopInset';
+import { reuseHydratedCards, type HydratedCardCache } from '../../services/vaultSecrets';
 import {
   matchLoginCandidates,
   groupCardsByLinkKey,
@@ -46,6 +51,7 @@ import {
   type CardLinkListRow,
 } from '@pkey/core';
 import type { PasswordCard } from '../../types';
+import type { LocaleStrings } from '../../constants/localization';
 
 /** Fallback until the search header reports its real height via onLayout. */
 const SEARCH_HEADER_FALLBACK_HEIGHT = 56;
@@ -97,7 +103,7 @@ function matchesCardsFilter(card: PasswordCard, filter: CardsListFilter): boolea
   }
 }
 
-function filterLabel(filter: NonNullable<CardsListFilter>, t: Record<string, string>): string {
+function filterLabel(filter: NonNullable<CardsListFilter>, t: LocaleStrings): string {
   switch (filter.kind) {
     case 'duplicates':
       return t.stat_duplicated_pass;
@@ -199,22 +205,13 @@ export const CardsList = () => {
     setExpandedCardId,
     setCustomIconModal,
   } = useUI();
-  const {
-    handleCreateNewCard,
-    handleUpdateCardValue,
-    handleUpdatePasswordListItem,
-    handleAddPasswordListItem,
-    handleSaveCard,
-    handleSaveCardWithFields,
-    handleDeleteCard,
-    handleCheckCardPassword,
-    hibpPendingIds,
-  } = useDatabase();
+  const { handleCreateNewCard, handleDeleteCard } = useDatabase();
   const { c, t, isDark } = useSettings();
   const { performBiometricOrPasswordCheck } = useAuth();
   const { queue } = useNotifications();
   const reduceMotion = useReducedMotion();
   const insets = useSafeAreaInsets();
+  const topInsetConsumed = useDashboardTopInsetConsumed();
   const {
     onPressIn: onFabPressIn,
     onPressOut: onFabPressOut,
@@ -223,11 +220,21 @@ export const CardsList = () => {
   } = usePressScale(0.97, 0);
 
   const listRef = useRef<FlashListRef<ListRow>>(null);
+  /** Last native offset. A blur during a fling parks here so the scroller cannot catch up later. */
+  const scrollOffsetYRef = useRef(0);
   /** While true, keep forcing contentOffset=0 through expand/layout races. */
   const pinScrollTopRef = useRef(false);
   const pinScrollTopTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   /** Finger / fling only — FlashList also emits onScroll during data relayout (sort). */
   const userScrollingRef = useRef(false);
+  const parkScroll = useParkScrollOnBlur(() => {
+    userScrollingRef.current = false;
+    // Native offset, not FlashList's scrollToOffset (that adds firstItemOffset).
+    listRef.current?.getNativeScrollRef()?.scrollTo({
+      y: scrollOffsetYRef.current,
+      animated: false,
+    });
+  });
   /**
    * After a sort while parked at the top, FlashList often nudges contentOffset by a
    * few px (first-item offset vs paddingTop under the search overlay). Snap back
@@ -243,6 +250,16 @@ export const CardsList = () => {
   const headerTranslate = useSharedValue(0);
   const prevScrollY = useSharedValue(0);
   const reduceMotionSV = useSharedValue(reduceMotion);
+  const prevReduceMotion = useRef(reduceMotion);
+  if (prevReduceMotion.current !== reduceMotion) {
+    prevReduceMotion.current = reduceMotion;
+    reduceMotionSV.value = reduceMotion;
+    if (reduceMotion) {
+      headerTranslate.value = 0;
+      prevScrollY.value = 0;
+      setHeaderPointerEvents('auto');
+    }
+  }
 
   useEffect(() => {
     return () => {
@@ -250,15 +267,6 @@ export const CardsList = () => {
       if (sortTopLockTimerRef.current) clearTimeout(sortTopLockTimerRef.current);
     };
   }, []);
-
-  useEffect(() => {
-    reduceMotionSV.value = reduceMotion;
-    if (reduceMotion) {
-      headerTranslate.value = 0;
-      prevScrollY.value = 0;
-      setHeaderPointerEvents('auto');
-    }
-  }, [reduceMotion]);
 
   const hasCards = db.cards.length > 0;
 
@@ -268,24 +276,17 @@ export const CardsList = () => {
     }
   }, [hasCards, playFabEntrance]);
 
-  const autoCollapse = !!db.settings?.autoCollapse;
   const groupByLink = !!db.settings?.groupCardsByLink;
-  const hibpEnabled = !!db.settings?.enableHibpCheck;
   const customPromptVisible = customPrompt.visible;
   const alertQueueBlocking = queue.some((n) => n.mode === 'alert');
-  const [qrScannerActive, setQrScannerActive] = useState(false);
   const [expandedGroupKey, setExpandedGroupKey] = useState<string | null>(null);
 
-  const handleQrScannerActiveChange = useCallback((active: boolean) => {
-    setQrScannerActive(active);
-  }, []);
-
-  const secretCards = useMemo(() => cardsWithVaultSecrets(db.cards), [db.cards]);
-
-  const { usernameIndex, passwordIndex } = useMemo(
-    () => buildDuplicateIndices(secretCards),
-    [secretCards]
-  );
+  const hydratedCacheRef = useRef<HydratedCardCache>(new Map());
+  const secretCards = useMemo(() => {
+    const reused = reuseHydratedCards(db.cards, hydratedCacheRef.current);
+    hydratedCacheRef.current = reused.cache;
+    return reused.cards;
+  }, [db.cards]);
 
   const filteredCards = useMemo(() => {
     const q = searchQuery.toLowerCase().trim();
@@ -387,6 +388,7 @@ export const CardsList = () => {
   const onScroll = useCallback(
     (event: NativeSyntheticEvent<NativeScrollEvent>) => {
       const yRaw = event.nativeEvent.contentOffset.y;
+      scrollOffsetYRef.current = yRaw;
       // Create-card / pin mode: reject drift from prepend+expand layout adjustments.
       if (pinScrollTopRef.current) {
         if (yRaw > 0.5) {
@@ -430,24 +432,34 @@ export const CardsList = () => {
   );
 
   const onScrollBeginDrag = useCallback(() => {
+    parkScroll.onScrollBeginDrag();
     userScrollingRef.current = true;
     sortTopLockRef.current = false;
     if (sortTopLockTimerRef.current) {
       clearTimeout(sortTopLockTimerRef.current);
       sortTopLockTimerRef.current = null;
     }
-  }, []);
+  }, [parkScroll]);
 
-  const onScrollEndDrag = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    const velocity = event.nativeEvent.velocity?.y ?? 0;
-    if (Math.abs(velocity) < 0.05) {
-      userScrollingRef.current = false;
-    }
-  }, []);
+  const onScrollEndDrag = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      const velocity = event.nativeEvent.velocity?.y ?? 0;
+      parkScroll.onScrollEndDrag(velocity);
+      if (Math.abs(velocity) < SCROLL_MOMENTUM_VELOCITY) {
+        userScrollingRef.current = false;
+      }
+    },
+    [parkScroll]
+  );
+
+  const onMomentumScrollBegin = useCallback(() => {
+    parkScroll.onMomentumScrollBegin();
+  }, [parkScroll]);
 
   const onMomentumScrollEnd = useCallback(() => {
+    parkScroll.onMomentumScrollEnd();
     userScrollingRef.current = false;
-  }, []);
+  }, [parkScroll]);
 
   const onContentSizeChange = useCallback(() => {
     if (pinScrollTopRef.current) {
@@ -499,7 +511,7 @@ export const CardsList = () => {
     setSearchQuery('');
     setCardsFilter(null);
     // Pin before await: FlashList may shift offset as soon as the prepend hits `data`.
-    // No LayoutAnimation here — it fights scroll anchoring with a tall expanded first row.
+    // The new key opens on the editor screen; the list stays collapsed underneath.
     beginPinScrollTop();
     void handleCreateNewCard().then(() => {
       forceScrollAbsoluteTop();
@@ -516,13 +528,11 @@ export const CardsList = () => {
     setSearchQuery,
   ]);
 
-  const handleToggle = useCallback(
+  const handleOpen = useCallback(
     (cardId: string) => {
-      if (autoCollapse) {
-        setExpandedCardId(expandedCardId === cardId ? null : cardId);
-      }
+      setExpandedCardId(cardId);
     },
-    [autoCollapse, expandedCardId, setExpandedCardId]
+    [setExpandedCardId]
   );
 
   const handleToggleGroup = useCallback((key: string) => {
@@ -533,56 +543,30 @@ export const CardsList = () => {
     (item: PasswordCard, subtitleMode: CollapsedSubtitleMode = 'link') => (
       <CardItem
         item={item}
-        expanded={expandedCardId === item.id}
-        autoCollapse={autoCollapse}
         isDark={isDark}
         c={c}
         t={t}
         appSettings={db.settings}
         customPromptVisible={customPromptVisible}
         alertQueueBlocking={alertQueueBlocking}
-        usernameIndex={usernameIndex}
-        passwordIndex={passwordIndex}
-        onToggle={() => handleToggle(item.id)}
+        onOpen={() => handleOpen(item.id)}
         onSetCustomIconModal={setCustomIconModal}
-        onUpdateCardValue={handleUpdateCardValue}
-        onUpdatePasswordListItem={handleUpdatePasswordListItem}
-        onAddPasswordListItem={handleAddPasswordListItem}
-        onSaveCard={handleSaveCard}
-        onSaveCardWithFields={handleSaveCardWithFields}
         onDeleteCard={handleDeleteCard}
         onBiometricCheck={performBiometricOrPasswordCheck}
-        onQrScannerActiveChange={handleQrScannerActiveChange}
-        hibpEnabled={hibpEnabled}
-        hibpChecking={hibpPendingIds.includes(item.id)}
-        onCheckHibp={handleCheckCardPassword}
         subtitleMode={subtitleMode}
       />
     ),
     [
-      expandedCardId,
-      autoCollapse,
       isDark,
       c,
       t,
       db.settings,
       customPromptVisible,
       alertQueueBlocking,
-      usernameIndex,
-      passwordIndex,
-      handleToggle,
+      handleOpen,
       setCustomIconModal,
-      handleUpdateCardValue,
-      handleUpdatePasswordListItem,
-      handleAddPasswordListItem,
-      handleSaveCard,
-      handleSaveCardWithFields,
       handleDeleteCard,
       performBiometricOrPasswordCheck,
-      handleQrScannerActiveChange,
-      hibpEnabled,
-      hibpPendingIds,
-      handleCheckCardPassword,
     ]
   );
 
@@ -618,14 +602,13 @@ export const CardsList = () => {
     return `group:${item.key}`;
   }, []);
 
-  // Separate recycle pools for collapsed vs expanded vs group rows.
-  const getItemType = useCallback(
-    (item: ListRow) => {
-      if (item.kind === 'group') return 'group';
-      if (expandedCardId && item.card.id === expandedCardId) return 'expanded';
-      return 'collapsed';
-    },
-    [expandedCardId]
+  const getItemType = useCallback((item: ListRow) => {
+    return item.kind === 'group' ? 'group' : 'single';
+  }, []);
+
+  const listExtraData = useMemo(
+    () => ({ expandedGroupKey, groupByLink }),
+    [expandedGroupKey, groupByLink]
   );
 
   return (
@@ -636,7 +619,7 @@ export const CardsList = () => {
         keyExtractor={keyExtractor}
         renderItem={renderItem}
         getItemType={getItemType}
-        extraData={{ expandedCardId, expandedGroupKey, qrScannerActive, groupByLink }}
+        extraData={listExtraData}
         style={styles.cardsList}
         contentContainerStyle={[
           styles.cardsListContent,
@@ -648,6 +631,7 @@ export const CardsList = () => {
         onScroll={onScroll}
         onScrollBeginDrag={onScrollBeginDrag}
         onScrollEndDrag={onScrollEndDrag}
+        onMomentumScrollBegin={onMomentumScrollBegin}
         onMomentumScrollEnd={onMomentumScrollEnd}
         onContentSizeChange={onContentSizeChange}
         scrollEventThrottle={16}
@@ -684,8 +668,8 @@ export const CardsList = () => {
             styles.searchBarOverlay,
             {
               backgroundColor: c.bg,
-              // Extend under the translucent status bar; list scrolls behind when collapsed.
-              paddingTop: insets.top + spacing.sm,
+              // Opaque under the status bar until scroll translates the header away.
+              paddingTop: estimateEdgeToEdgeTopPadding(insets.top, topInsetConsumed, spacing.sm),
             },
             headerAnimatedStyle,
           ]}

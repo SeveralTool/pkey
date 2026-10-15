@@ -4,6 +4,9 @@ const mockGetInfoAsync = jest.fn();
 const mockMakeDirectoryAsync = jest.fn();
 const mockReadDirectoryAsync = jest.fn();
 const mockDeleteAsync = jest.fn();
+const mockMoveAsync = jest.fn();
+/** When false, `moveAsync` is absent and snapshots write straight to the final URI. */
+let mockExposeMoveAsync = false;
 
 jest.mock('expo-file-system/legacy', () => ({
   documentDirectory: 'file:///docs/',
@@ -15,6 +18,9 @@ jest.mock('expo-file-system/legacy', () => ({
   makeDirectoryAsync: (...args: unknown[]) => mockMakeDirectoryAsync(...args),
   readDirectoryAsync: (...args: unknown[]) => mockReadDirectoryAsync(...args),
   deleteAsync: (...args: unknown[]) => mockDeleteAsync(...args),
+  get moveAsync() {
+    return mockExposeMoveAsync ? (...args: unknown[]) => mockMoveAsync(...args) : undefined;
+  },
 }));
 
 jest.mock('expo-sharing', () => ({
@@ -23,7 +29,7 @@ jest.mock('expo-sharing', () => ({
 }));
 
 const mockBeginExternalUiSession = jest.fn();
-const mockEndExternalUiSession = jest.fn(async () => undefined);
+const mockEndExternalUiSession = jest.fn(async (..._args: unknown[]) => undefined);
 jest.mock('../utils/autoLogoutGuard', () => ({
   suppressAutoLogout: jest.fn(),
   beginExternalUiSession: (...args: unknown[]) => mockBeginExternalUiSession(...args),
@@ -32,6 +38,8 @@ jest.mock('../utils/autoLogoutGuard', () => ({
 
 import {
   assertEnoughDiskSpace,
+  AUTO_BACKUP_MAX_FILES,
+  buildAutoExportFilename,
   buildExportFilename,
   deleteOldestExportFile,
   EXPORT_DISK_HEADROOM_BYTES,
@@ -40,11 +48,14 @@ import {
   formatExportBytes,
   formatExportTimestamp,
   isNoSpaceError,
+  listAutoBackupFiles,
   listExportFiles,
   parseExportFilename,
   purgeEphemeralExports,
   purgePlaintextExports,
+  resolveListedExportFilename,
   shareExportFile,
+  writeAutoBackupFile,
   writeEphemeralExportFile,
   writeExportFile,
 } from './exportsStorage';
@@ -74,10 +85,30 @@ describe('exportsStorage naming', () => {
       time: '180645',
       suffix: undefined,
       ext: 'json',
+      origin: 'manual',
     });
     expect(parseExportFilename('pkey-20260731-180645-3.pkey')?.suffix).toBe(3);
+    expect(parseExportFilename('pkey-20260731-180645-3.pkey')?.origin).toBe('manual');
     expect(parseExportFilename('pkey-json-20260731-180645.json')).toBeNull();
     expect(parseExportFilename('random.txt')).toBeNull();
+  });
+
+  it('parses automatic .pkey names and rejects auto names with another extension', () => {
+    expect(parseExportFilename('pkey-auto-20261008-162400.pkey')).toEqual({
+      date: '20261008',
+      time: '162400',
+      suffix: undefined,
+      ext: 'pkey',
+      origin: 'auto',
+    });
+    expect(parseExportFilename('pkey-auto-20261008-162400-2.pkey')?.suffix).toBe(2);
+    expect(parseExportFilename('pkey-auto-20261008-162400.json')).toBeNull();
+    expect(parseExportFilename('weird-pkey-auto-20261008-162400.pkey')).toBeNull();
+  });
+
+  it('builds pkey-auto-YYYYMMDD-HHmmss.pkey', () => {
+    expect(buildAutoExportFilename(fixed)).toBe('pkey-auto-20260731-180645.pkey');
+    expect(buildAutoExportFilename(fixed, 2)).toBe('pkey-auto-20260731-180645-2.pkey');
   });
 });
 
@@ -194,6 +225,17 @@ describe('writeExportFile limit cap', () => {
   it('counts every extension towards the same cap', async () => {
     present = [...fullList.slice(0, 8), 'pkey-20260731-181100.csv', 'pkey-20260731-181200.pkey'];
     await expect(writeExportFile('pkey', 'enc')).rejects.toMatchObject({ code: 'limit' });
+  });
+
+  it('does not count automatic backups toward the manual cap', async () => {
+    present = Array.from(
+      { length: AUTO_BACKUP_MAX_FILES },
+      (_, i) => `pkey-auto-2026100${i + 1}-180000.pkey`
+    );
+    mockWriteAsStringAsync.mockResolvedValue(undefined);
+    await expect(writeExportFile('pkey', 'enc')).resolves.toMatchObject({
+      filename: expect.stringMatching(/^pkey-\d{8}-\d{6}\.pkey$/),
+    });
   });
 });
 
@@ -349,6 +391,200 @@ describe('purgeEphemeralExports', () => {
     mockGetInfoAsync.mockResolvedValue({ exists: false });
     await purgeEphemeralExports();
     expect(mockDeleteAsync).not.toHaveBeenCalled();
+  });
+});
+
+describe('writeAutoBackupFile', () => {
+  let present: string[];
+
+  beforeEach(() => {
+    mockExposeMoveAsync = false;
+    present = [];
+    mockGetFreeDiskStorageAsync.mockReset();
+    mockGetFreeDiskStorageAsync.mockResolvedValue(EXPORT_DISK_HEADROOM_BYTES + 10_000);
+    mockGetInfoAsync.mockReset();
+    mockMakeDirectoryAsync.mockReset();
+    mockWriteAsStringAsync.mockReset();
+    mockReadDirectoryAsync.mockReset();
+    mockDeleteAsync.mockReset();
+    mockWriteAsStringAsync.mockImplementation(async (uri: string) => {
+      const name = String(uri).split('/').pop() ?? '';
+      if (!present.includes(name)) present.push(name);
+    });
+    mockDeleteAsync.mockImplementation(async (uri: string) => {
+      const name = String(uri).split('/').pop() ?? '';
+      present = present.filter((n) => n !== name);
+    });
+    mockReadDirectoryAsync.mockImplementation(async () => present);
+    mockGetInfoAsync.mockImplementation(async (uri: string) => {
+      if (String(uri).endsWith('/exports/')) {
+        return { exists: true, isDirectory: true };
+      }
+      const name = String(uri).split('/').pop() ?? '';
+      const autoIndex = present.indexOf(name);
+      return present.includes(name)
+        ? {
+            exists: true,
+            isDirectory: false,
+            size: 10,
+            modificationTime: 100 + autoIndex,
+          }
+        : { exists: false };
+    });
+  });
+
+  it('writes even when 10 manual exports already exist', async () => {
+    present = Array.from(
+      { length: EXPORT_MAX_FILES },
+      (_, i) => `pkey-20260731-${String(180001 + i).padStart(6, '0')}.pkey`
+    );
+    const written = await writeAutoBackupFile('enc');
+    expect(written.filename).toMatch(/^pkey-auto-.*\.pkey$/);
+    expect(mockWriteAsStringAsync).toHaveBeenCalledTimes(1);
+  });
+
+  it('rotates to 3 automatic files and deletes the oldest auto, not an older manual', async () => {
+    present = [
+      'pkey-20200101-000000.pkey',
+      'pkey-auto-20261001-000000.pkey',
+      'pkey-auto-20261002-000000.pkey',
+      'pkey-auto-20261003-000000.pkey',
+    ];
+    mockGetInfoAsync.mockImplementation(async (uri: string) => {
+      if (String(uri).endsWith('/exports/')) {
+        return { exists: true, isDirectory: true };
+      }
+      const name = String(uri).split('/').pop() ?? '';
+      const mtimes: Record<string, number> = {
+        'pkey-20200101-000000.pkey': 1,
+        'pkey-auto-20261001-000000.pkey': 10,
+        'pkey-auto-20261002-000000.pkey': 20,
+        'pkey-auto-20261003-000000.pkey': 30,
+      };
+      if (present.includes(name)) {
+        return {
+          exists: true,
+          isDirectory: false,
+          size: 10,
+          modificationTime: mtimes[name] ?? 40,
+        };
+      }
+      return { exists: false };
+    });
+    await writeAutoBackupFile('enc');
+    expect(present).toContain('pkey-20200101-000000.pkey');
+    expect(present.filter((n) => n.startsWith('pkey-auto-'))).toHaveLength(AUTO_BACKUP_MAX_FILES);
+    expect(present).not.toContain('pkey-auto-20261001-000000.pkey');
+    expect(mockDeleteAsync).toHaveBeenCalledWith(
+      'file:///docs/exports/pkey-auto-20261001-000000.pkey',
+      { idempotent: true }
+    );
+  });
+
+  it('does not delete existing autos when the write fails with no_space', async () => {
+    present = [
+      'pkey-auto-20261001-000000.pkey',
+      'pkey-auto-20261002-000000.pkey',
+      'pkey-auto-20261003-000000.pkey',
+    ];
+    mockWriteAsStringAsync.mockReset();
+    mockWriteAsStringAsync.mockRejectedValue(new Error('ENOSPC'));
+    await expect(writeAutoBackupFile('enc')).rejects.toMatchObject({ code: 'no_space' });
+    expect(present).toEqual([
+      'pkey-auto-20261001-000000.pkey',
+      'pkey-auto-20261002-000000.pkey',
+      'pkey-auto-20261003-000000.pkey',
+    ]);
+    expect(mockDeleteAsync).not.toHaveBeenCalled();
+  });
+
+  it('renames a temp file into place so a mid-write cut is not a listed backup', async () => {
+    mockExposeMoveAsync = true;
+    mockMoveAsync.mockImplementation(async (args: { from: string; to: string }) => {
+      const fromName = String(args.from).split('/').pop() ?? '';
+      const toName = String(args.to).split('/').pop() ?? '';
+      present = present.filter((name) => name !== fromName);
+      if (!present.includes(toName)) present.push(toName);
+    });
+    const written = await writeAutoBackupFile('enc');
+    expect(String(mockWriteAsStringAsync.mock.calls[0][0])).toBe(
+      `file:///docs/exports/${written.filename}.tmp`
+    );
+    expect(mockMoveAsync).toHaveBeenCalledWith({
+      from: `file:///docs/exports/${written.filename}.tmp`,
+      to: `file:///docs/exports/${written.filename}`,
+    });
+    expect(present).toEqual([written.filename]);
+    expect(present.some((name) => name.endsWith('.tmp'))).toBe(false);
+  });
+
+  it('drops the temp file and does not rotate when the rename fails', async () => {
+    mockExposeMoveAsync = true;
+    present = [
+      'pkey-auto-20261001-000000.pkey',
+      'pkey-auto-20261002-000000.pkey',
+      'pkey-auto-20261003-000000.pkey',
+    ];
+    mockMoveAsync.mockRejectedValue(new Error('rename failed'));
+    await expect(writeAutoBackupFile('enc')).rejects.toMatchObject({ code: 'write_failed' });
+    expect(present.filter((name) => name.startsWith('pkey-auto-'))).toEqual([
+      'pkey-auto-20261001-000000.pkey',
+      'pkey-auto-20261002-000000.pkey',
+      'pkey-auto-20261003-000000.pkey',
+    ]);
+    expect(mockDeleteAsync.mock.calls.map((call) => String(call[0]))).toEqual([
+      expect.stringMatching(/\.pkey\.tmp$/),
+    ]);
+  });
+});
+
+describe('resolveListedExportFilename', () => {
+  beforeEach(() => {
+    mockGetInfoAsync.mockReset();
+    mockGetInfoAsync.mockImplementation(async (uri: string) => {
+      if (String(uri).endsWith('/exports/')) {
+        return { exists: true, isDirectory: true };
+      }
+      const name = String(uri).split('/').pop() ?? '';
+      return name === 'pkey-auto-20261008-162400.pkey'
+        ? { exists: true, isDirectory: false, size: 10 }
+        : { exists: false };
+    });
+  });
+
+  it('accepts a real automatic basename', async () => {
+    await expect(resolveListedExportFilename('pkey-auto-20261008-162400.pkey')).resolves.toBe(
+      'file:///docs/exports/pkey-auto-20261008-162400.pkey'
+    );
+  });
+
+  it('rejects path traversal, absolute URIs, and malformed names', async () => {
+    await expect(
+      resolveListedExportFilename('../pkey-auto-20261008-162400.pkey')
+    ).resolves.toBeNull();
+    await expect(
+      resolveListedExportFilename('file:///docs/exports/pkey-auto-20261008-162400.pkey')
+    ).resolves.toBeNull();
+    await expect(
+      resolveListedExportFilename('pkey-manual-20261008-162400.pkey')
+    ).resolves.toBeNull();
+  });
+});
+
+describe('listAutoBackupFiles', () => {
+  it('returns only automatic origin files', async () => {
+    mockReadDirectoryAsync.mockResolvedValue([
+      'pkey-20260731-180001.pkey',
+      'pkey-auto-20261008-162400.pkey',
+    ]);
+    mockGetInfoAsync.mockImplementation(async (uri: string) => {
+      if (String(uri).endsWith('/exports/')) {
+        return { exists: true, isDirectory: true };
+      }
+      return { exists: true, isDirectory: false, size: 10, modificationTime: 100 };
+    });
+    const listed = await listAutoBackupFiles();
+    expect(listed.map((f) => f.filename)).toEqual(['pkey-auto-20261008-162400.pkey']);
   });
 });
 

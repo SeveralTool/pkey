@@ -8,7 +8,7 @@ PKEY is local-first: vault ciphertext lives on your devices. There is no vendor 
 |-------|--------|
 | Master password | Ephemeral JS input during unlock only (`masterPasswordVault`) |
 | Root key | Native secret holder (`pkey-crypto`) while unlocked; wiped on lock. JS may briefly see plaintext when rendering a secret |
-| Biometric unlock bundle | Hardware-bound Keystore/Keychain via `pkey-vault-keys` (user-auth required per use) |
+| Biometric unlock bundle | Keystore/Keychain via `pkey-vault-keys` when the device is not flagged compromised (user-auth per use). SecureStore v2 (`requireAuthentication: false`) only if the native module is missing or the hardware write fails for a reason other than user cancel. A compromised device gets no new bundle. Logout keeps the bundle; reset and migration delete it |
 | Encrypted vault file | App documents (`pkey_encrypted_db.json`, envelope v4 / legacy v3) |
 | Session / sync tokens | Phone sync server + browser session after unlock |
 | Offline web vault | Browser IndexedDB (encrypted envelope) |
@@ -34,6 +34,7 @@ flowchart LR
 - **LAN web access assumes a trusted Wi‑Fi** (home/office you control). Transport to the browser is plain HTTP/WS; confidentiality of vault payloads relies on application-layer encryption and SPAKE2 (protocol v3), not TLS on port 7392. A MITM can still replace the HTML shell; compare the SAS and only open the URL copied from the phone.
 - Device migration **does** use TLS between phones; users should compare fingerprints before transfer.
 - The master password is never recoverable if lost. With **device secret** enabled, a `.pkey` copy also needs the recovery kit.
+- Opt-in automatic backup is another copy of the vault ciphertext in the app sandbox (`exports/`). It leaves the phone only if the user taps Share. Android `allowBackup` stays off; Google/iCloud device backup still cannot copy the vault.
 - Hermes cannot zeroize JavaScript strings. Lock wipes references and native key handles; residual copies of a revealed secret may remain until GC.
 
 ## Adversaries (in scope for design)
@@ -43,7 +44,7 @@ flowchart LR
 | Hostile LAN MITM | Can see/modify cleartext HTTP shell and attempt WS tampering | SPAKE2 + AEAD envelopes; 6-digit SAS on phone-unlock; use trusted Wi‑Fi; disable web access / strict offline profile |
 | Malware on unlocked phone/PC | Can read unlocked vault / browser session | OS lock, auto-logout, foreground idle lock, screen-capture controls. **Accepted residual:** malware with the unlocked UI |
 | Stolen locked phone | Offline vault ciphertext | Argon2id 64 MiB + strong master password policy; optional device secret |
-| Root / jailbreak + forensic dump | Extract app files, attempt Keystore/Keychain, memory scrape | Hardware-bound biometric keys; native key holder wipe on lock; backup exclusion; root detection (best-effort, not a boundary) |
+| Root / jailbreak + forensic dump | Extract app files, attempt Keystore/Keychain, memory scrape | Hardware-bound biometric keys; no new unlock bundle (including no SecureStore copy) when detection flags the device; native key holder wipe on lock; backup exclusion; root detection is best-effort and does not lock the open vault or turn autofill off |
 | Malicious satellite client | Fake browser on LAN | SPAKE2; blocklist of source ids / IPs in Security tab |
 | Malicious backup / USB copy of `.pkey` | Offline KDF attack | Argon2id; device secret makes the file useless without the recovery kit |
 | Clipboard / screenshot malware | Harvest a copied or visible secret | 30 s clipboard clear; FLAG_SECURE default on |

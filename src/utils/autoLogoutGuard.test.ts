@@ -1,9 +1,13 @@
 import {
   beginExternalUiSession,
+  consumeSilentPwaHoldRelease,
   endExternalUiSession,
   EXTERNAL_UI_SETTLE_MS,
   isExternalUiSession,
+  isPwaResponseHold,
   setBackgroundLockHandler,
+  setPwaResponseHold,
+  silencePwaHoldRelease,
   requestBackgroundLockIfNeeded,
   suppressAutoLogout,
   isAutoLogoutSuppressed,
@@ -103,6 +107,39 @@ describe('autoLogoutGuard time suppress', () => {
     jest.setSystemTime(1_000_000 + 5_000);
     expect(isAutoLogoutSuppressed()).toBe(false);
     jest.useRealTimers();
+  });
+});
+
+describe('PWA response hold', () => {
+  afterEach(() => {
+    setPwaResponseHold(false);
+    consumeSilentPwaHoldRelease();
+  });
+
+  it('tracks a live phone prompt without marking the release as silent', () => {
+    expect(isPwaResponseHold()).toBe(false);
+    setPwaResponseHold(true);
+    expect(isPwaResponseHold()).toBe(true);
+    setPwaResponseHold(false);
+    expect(isPwaResponseHold()).toBe(false);
+    expect(consumeSilentPwaHoldRelease()).toBe(false);
+  });
+
+  it('consumes a silent release once so vault lock does not log out again', () => {
+    setPwaResponseHold(true);
+    silencePwaHoldRelease();
+    expect(isPwaResponseHold()).toBe(false);
+    expect(consumeSilentPwaHoldRelease()).toBe(true);
+    expect(consumeSilentPwaHoldRelease()).toBe(false);
+    expect(isPwaResponseHold()).toBe(false);
+  });
+
+  it('clears a pending silent release when a new prompt starts', () => {
+    silencePwaHoldRelease();
+    setPwaResponseHold(true);
+    expect(isPwaResponseHold()).toBe(true);
+    expect(consumeSilentPwaHoldRelease()).toBe(false);
+    expect(isPwaResponseHold()).toBe(true);
   });
 });
 

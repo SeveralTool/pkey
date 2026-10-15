@@ -1,12 +1,22 @@
 /**
  * @fileoverview State machine for one-shot device-to-device migration.
  */
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useCoreState } from './CoreStateContext';
 import { useAuth } from './AuthContext';
 import { useSync } from './SyncContext';
 import { checkDatabaseExists, destroyDatabase } from '../services/storage';
+import { flushPendingDatabaseWrite } from '../hooks/useDebouncedVaultWrite';
+import { resumeAutoBackup, suspendAutoBackup } from '../services/autoBackupRun';
 import { destroyMasterKey } from '../services/biometrics';
 import { getLocalIp } from '../services/networkUtils';
 import { MigrationReceiverServer } from '../services/migrationReceiverServer';
@@ -93,18 +103,9 @@ export const useMigration = () => useContext(MigrationContext);
 
 /** Runs receive/send migration flows over the LAN migration protocol. */
 export const MigrationProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const {
-    db,
-    setDb,
-    setHasSession,
-    setSessionGate,
-    setIsLogged,
-    isLogged,
-    setMasterPassword,
-    setRepeatPassword,
-  } = useCoreState();
+  const { db, setHasSession, setSessionGate, isLogged } = useCoreState();
 
-  const { performBiometricOrPasswordCheck } = useAuth();
+  const { performBiometricOrPasswordCheck, lockToLoginShell } = useAuth();
 
   const { webServerEnabled, disableWebServer, enableWebServer } = useSync();
   const webWasEnabledRef = useRef(false);
@@ -233,14 +234,6 @@ export const MigrationProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     setSenderTlsFingerprint(null);
   }, [cleanup]);
 
-  const logoutToLoginShell = useCallback(async () => {
-    await destroyMasterKey();
-    setIsLogged(false);
-    setMasterPassword('');
-    setRepeatPassword('');
-    setDb((prev) => ({ ...prev, cards: [], passwordHash: '' }));
-  }, [setIsLogged, setMasterPassword, setRepeatPassword, setDb]);
-
   /**
    * Receiver abort: discard staged vault, keep previous live DB (if any), go to login.
    */
@@ -262,7 +255,7 @@ export const MigrationProvider: React.FC<{ children: React.ReactNode }> = ({ chi
               await discardPendingMigration();
               pendingTargetRef.current = null;
               setIncompleteMigrationPending(false);
-              await logoutToLoginShell();
+              await lockToLoginShell({ flushPending: true });
               try {
                 const exists = await checkDatabaseExists();
                 setHasSession(exists);
@@ -282,7 +275,7 @@ export const MigrationProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         },
       ],
     });
-  }, [closeMigration, logoutToLoginShell, setHasSession, setSessionGate, db.settings?.language]);
+  }, [closeMigration, lockToLoginShell, setHasSession, setSessionGate, db.settings?.language]);
 
   const cancelMigration = useCallback(() => {
     const t = getT();
@@ -347,7 +340,7 @@ export const MigrationProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     await commitPendingMigration();
     pendingTargetRef.current = null;
     setIncompleteMigrationPending(false);
-    await logoutToLoginShell();
+    await lockToLoginShell();
     setHasSession(true);
     closeMigration();
     notifications.alert({
@@ -355,7 +348,7 @@ export const MigrationProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       message: t.migration_receive_done_body,
       variant: 'success',
     });
-  }, [closeMigration, logoutToLoginShell, setHasSession, db.settings?.language]);
+  }, [closeMigration, lockToLoginShell, setHasSession, db.settings?.language]);
 
   /**
    * Stage received encrypted vault — do NOT overwrite live DB until finalize succeeds.
@@ -372,6 +365,7 @@ export const MigrationProvider: React.FC<{ children: React.ReactNode }> = ({ chi
             pairingSecret: target.pairingSecret,
             sessionId: target.sessionId,
             senderWipeProof: target.senderWipeProof,
+            senderTlsFingerprint: target.senderTlsFingerprint,
           }
         : null;
       await stagePendingMigration(encryptedPayload, cardCount, mapped);
@@ -385,7 +379,7 @@ export const MigrationProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   const formatMigrationError = (e: unknown, fallback: string): string => {
     if (e instanceof MigrationSendError) {
-      return translateMigrationSendError(e, getT() as Record<string, string>);
+      return translateMigrationSendError(e, getT());
     }
     const msg = e instanceof Error ? e.message : typeof e === 'string' ? e : '';
     const code = getUnknownErrorCode(e);
@@ -588,14 +582,13 @@ export const MigrationProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           async (mid) => {
             if (mid !== result.migrationId) return;
             try {
+              await suspendAutoBackup();
+              await flushPendingDatabaseWrite();
               await destroyDatabase();
-              await destroyMasterKey();
-              setDb((prev) => ({ ...prev, cards: [], passwordHash: '' }));
+              await lockToLoginShell();
               setHasSession(false);
-              setIsLogged(false);
-              setMasterPassword('');
-              setRepeatPassword('');
             } finally {
+              resumeAutoBackup();
               closeMigration();
               notifications.alert({
                 title: getT().migration_wipe_done_title,
@@ -612,7 +605,7 @@ export const MigrationProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         callbackServer.stop();
         const sendErr = coerceMigrationSendError(e);
         if (sendErr) {
-          setMigrationError(translateMigrationSendError(sendErr, getT() as Record<string, string>));
+          setMigrationError(translateMigrationSendError(sendErr, getT()));
         } else {
           setMigrationError(formatMigrationError(e, getT().migration_send_failed));
         }
@@ -623,11 +616,8 @@ export const MigrationProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       db,
       deviceId,
       setPhase,
-      setDb,
       setHasSession,
-      setIsLogged,
-      setMasterPassword,
-      setRepeatPassword,
+      lockToLoginShell,
       cleanup,
       closeMigration,
       db.settings?.language,
@@ -720,6 +710,7 @@ export const MigrationProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           pairingSecret: live.pairingSecret,
           sessionId: live.sessionId,
           senderWipeProof: live.senderWipeProof,
+          senderTlsFingerprint: live.senderTlsFingerprint,
         }
       : pendingTargetRef.current;
 
@@ -738,6 +729,7 @@ export const MigrationProvider: React.FC<{ children: React.ReactNode }> = ({ chi
         target.pairingSecret,
         target.sessionId,
         target.senderWipeProof,
+        target.senderTlsFingerprint,
         target.senderIpAlternates
       );
       if (!ok) {
@@ -753,41 +745,70 @@ export const MigrationProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     });
   }, [setPhase, confirmMigrationAccess, finishReceiverLocally, db.settings?.language]);
 
-  return (
-    <MigrationContext.Provider
-      value={{
-        migrationRole,
-        migrationPhase,
-        migrationProgress,
-        migrationMessage,
-        migrationError,
-        migrationVisible,
-        discoveredDevices,
-        receiverQrPayload,
-        receiverIp,
-        receiverSessionId,
-        receiverPairingSecret,
-        receiverFingerprint,
-        senderFingerprint,
-        receiverTlsFingerprint,
-        senderTlsFingerprint,
-        receiverPort: MIGRATION_PORT,
-        nativeMigrationAvailable,
-        mdnsAvailable,
-        cardCountForMigration: db.cards?.length || 0,
-        openMigrationSend,
-        openMigrationReceive,
-        closeMigration,
-        selectDeviceAndMigrate,
-        connectFromQr,
-        connectManual,
-        finalizeMigration,
-        abortReceivedMigration,
-        cancelMigration,
-        incompleteMigrationPending,
-      }}
-    >
-      {children}
-    </MigrationContext.Provider>
+  const cardCountForMigration = db.cards?.length || 0;
+  const migrationValue = useMemo(
+    () => ({
+      migrationRole,
+      migrationPhase,
+      migrationProgress,
+      migrationMessage,
+      migrationError,
+      migrationVisible,
+      discoveredDevices,
+      receiverQrPayload,
+      receiverIp,
+      receiverSessionId,
+      receiverPairingSecret,
+      receiverFingerprint,
+      senderFingerprint,
+      receiverTlsFingerprint,
+      senderTlsFingerprint,
+      receiverPort: MIGRATION_PORT,
+      nativeMigrationAvailable,
+      mdnsAvailable,
+      cardCountForMigration,
+      openMigrationSend,
+      openMigrationReceive,
+      closeMigration,
+      selectDeviceAndMigrate,
+      connectFromQr,
+      connectManual,
+      finalizeMigration,
+      abortReceivedMigration,
+      cancelMigration,
+      incompleteMigrationPending,
+    }),
+    [
+      migrationRole,
+      migrationPhase,
+      migrationProgress,
+      migrationMessage,
+      migrationError,
+      migrationVisible,
+      discoveredDevices,
+      receiverQrPayload,
+      receiverIp,
+      receiverSessionId,
+      receiverPairingSecret,
+      receiverFingerprint,
+      senderFingerprint,
+      receiverTlsFingerprint,
+      senderTlsFingerprint,
+      nativeMigrationAvailable,
+      mdnsAvailable,
+      cardCountForMigration,
+      openMigrationSend,
+      openMigrationReceive,
+      closeMigration,
+      selectDeviceAndMigrate,
+      connectFromQr,
+      connectManual,
+      finalizeMigration,
+      abortReceivedMigration,
+      cancelMigration,
+      incompleteMigrationPending,
+    ]
   );
+
+  return <MigrationContext.Provider value={migrationValue}>{children}</MigrationContext.Provider>;
 };

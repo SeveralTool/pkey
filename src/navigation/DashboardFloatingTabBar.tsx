@@ -4,13 +4,13 @@
  * Native UITabBar / BottomNavigationView stay hidden; this island is the chrome.
  * Content scrolls behind it. Selected tab uses a sliding inset chip.
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useRef, useState } from 'react';
 import { Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Haptics from 'expo-haptics';
 import Animated, { useAnimatedStyle, useSharedValue, withSpring } from 'react-native-reanimated';
-import { useUI } from '../context/UIContext';
+import { useDashboardTabName, useSetDashboardTab } from '../context/UIContext';
 import { useSettings } from '../context/SettingsContext';
 import { useReducedMotion } from '../hooks/useReducedMotion';
 import { GlassSurface } from './GlassSurface';
@@ -90,7 +90,8 @@ function TabCell({ tab, selected, color, label, onPress }: TabCellProps): React.
 
 /** Overlay capsule with glass material and a sliding selected chip. */
 export function DashboardFloatingTabBar(): React.JSX.Element {
-  const { currentTab, setCurrentTab } = useUI();
+  const currentTab = useDashboardTabName();
+  const setCurrentTab = useSetDashboardTab();
   const { t, c, isDark } = useSettings();
   const insets = useSafeAreaInsets();
   const reduceMotion = useReducedMotion();
@@ -98,14 +99,16 @@ export function DashboardFloatingTabBar(): React.JSX.Element {
   const selectedIndex = Math.max(0, DASHBOARD_TAB_NAMES.indexOf(currentTab));
   const [trackWidth, setTrackWidth] = useState(0);
   const indexSv = useSharedValue(selectedIndex);
+  const prevTab = useRef({ selectedIndex, reduceMotion });
 
-  useEffect(() => {
-    if (reduceMotion) {
-      indexSv.value = selectedIndex;
-      return;
-    }
-    indexSv.value = withSpring(selectedIndex, SPRING);
-  }, [indexSv, reduceMotion, selectedIndex]);
+  // Start the chip before paint. An effect would slide it one frame late.
+  if (
+    prevTab.current.selectedIndex !== selectedIndex ||
+    prevTab.current.reduceMotion !== reduceMotion
+  ) {
+    prevTab.current = { selectedIndex, reduceMotion };
+    indexSv.value = reduceMotion ? selectedIndex : withSpring(selectedIndex, SPRING);
+  }
 
   const indicatorStyle = useAnimatedStyle(() => {
     const inner = Math.max(0, trackWidth - INNER_PAD * 2);
@@ -208,7 +211,7 @@ const styles = StyleSheet.create({
     shadowRadius: 16,
   },
   innerSheen: {
-    ...StyleSheet.absoluteFillObject,
+    ...StyleSheet.absoluteFill,
     borderRadius: TAB_BAR_PILL_HEIGHT / 2,
     borderWidth: StyleSheet.hairlineWidth,
     borderBottomColor: 'transparent',

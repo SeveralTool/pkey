@@ -21,6 +21,14 @@ export interface PkeyWebAccessModule {
   startForegroundService(title: string, body: string): Promise<void>;
   /** Stops the platform keep-alive helper. */
   stopForegroundService(): Promise<void>;
+  /**
+   * Android: silent foreground service so the 1-minute backup timer survives
+   * leaving PKEY. Missing on a dev client built before that service existed.
+   * iOS: no-op.
+   */
+  startBackupKeepAlive?(title: string, body: string): Promise<void>;
+  /** Android: stops the 1-minute backup keep-alive. iOS: no-op. */
+  stopBackupKeepAlive?(): Promise<void>;
   /** Legacy no-op for status updates (product alerts are JS one-shots). */
   updateNotification(body: string): Promise<void>;
   /**
@@ -56,7 +64,9 @@ export function getWebAccessKeepAlivePlatform(): 'android' | 'ios' | null {
  * iOS fires this when the UIBackgroundTask grace period is about to end.
  * No-op subscription on Android / when the module is missing.
  */
-export function addBackgroundTimeExpiringListener(listener: () => void): EventSubscription | { remove: () => void } {
+export function addBackgroundTimeExpiringListener(
+  listener: () => void
+): EventSubscription | { remove: () => void } {
   if (!loaded?.addListener || Platform.OS !== 'ios') {
     return { remove: () => {} };
   }

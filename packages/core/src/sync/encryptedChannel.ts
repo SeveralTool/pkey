@@ -3,7 +3,12 @@
  */
 
 import { encryptPayload, decryptPayload } from '../crypto/index';
-import { encryptWireAead, decryptWireAead, isAeadWireEnvelope, type SyncAeadEnvelope } from '../crypto/wireAead';
+import {
+  encryptWireAead,
+  decryptWireAead,
+  isAeadWireEnvelope,
+  type SyncAeadEnvelope,
+} from '../crypto/wireAead';
 import { isHostProofSecretHex } from './auth-client';
 import {
   CONTROL_WIRE_INNER_VERSION,
@@ -25,11 +30,15 @@ export interface SyncCbcEnvelope {
 /** Wire envelope: AEAD (protocol v3) or CBC+HMAC (protocol v2 grace). */
 export type SyncWireEnvelope = SyncCbcEnvelope | SyncAeadEnvelope;
 
-/** Sealed post-auth control frame: type in the clear, body only as ciphertext. */
-export interface ControlWireMessage {
+/**
+ * Sealed post-auth control frame: type in the clear, body only as ciphertext.
+ * Declared as a type alias (not an interface) so it stays assignable to the
+ * index-signature `WsMessage` shape used by the mobile WebSocket layer.
+ */
+export type ControlWireMessage = {
   type: string;
   encryptedPayload: SyncWireEnvelope;
-}
+};
 
 /** Minimum fields inside every control envelope (`v` / `exp` / `token`). */
 export interface ControlWireInnerBase {
@@ -62,7 +71,11 @@ export type EncryptedSyncPushWire = SyncPushPayload & { token: string };
  *   after a successful password HMAC (never on the pre-auth challenge).
  * @returns Structured sync envelope (`salt`, `iv`, `ciphertext`, `hmac`).
  */
-function encryptWire(payload: unknown, secretHex: string, protocolVersion: number): SyncWireEnvelope {
+function encryptWire(
+  payload: unknown,
+  secretHex: string,
+  protocolVersion: number
+): SyncWireEnvelope {
   if (protocolVersion >= 3) return encryptWireAead(payload, secretHex);
   return encryptPayload(payload, secretHex);
 }

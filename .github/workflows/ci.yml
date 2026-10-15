@@ -102,14 +102,15 @@ jobs:
       - run: npm run validate:otp
 
   dependency-audit:
-    # Fails the build on moderate+ vulnerabilities in production deps.
-    # Configure allow-list in .audit-ci.json when needed.
+    # Fails the build on moderate+ vulnerabilities (prod and dev deps).
+    # audit-ci only reads a config file when --config is passed; the allowlist
+    # and its rationale live in .audit-ci.json + docs/dev_procedure/automatizations/quality/dependency-audit.md.
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-node-ci
       - name: audit-ci (moderate+)
-        run: npx --no-install audit-ci --moderate --report-type summary
+        run: npx --no-install audit-ci --config .audit-ci.json
 
   sbom:
     runs-on: ubuntu-latest

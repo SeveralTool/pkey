@@ -7,14 +7,15 @@ import { AuthProvider, useAuth } from './AuthContext';
 import { DatabaseProvider, useDatabase } from './DatabaseContext';
 import { SettingsProvider, useSettings } from './SettingsContext';
 import { NotificationProvider, useNotifications } from './NotificationContext';
-import { UIProvider, useUI } from './UIContext';
+import { UIProvider, useDashboardTabName, useSetDashboardTab, useUI } from './UIContext';
 import { SyncProvider, useSync } from './SyncContext';
 import { MigrationProvider, useMigration } from './MigrationContext';
 
 /** Nesting root for core, UI, auth, database, settings, notifications, sync, and migration. */
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   // UIProvider sits directly under CoreStateProvider because Auth/Database/Sync
-  // consume UI setters (expanded card, cards filter, current tab).
+  // consume UI setters (expanded card, cards filter). The active tab is a
+  // separate context so those trees do not re-render on tab switches.
   return (
     <CoreStateProvider>
       <UIProvider>
@@ -42,6 +43,8 @@ export const useAppContext = () => {
   const settings = useSettings();
   const notifications = useNotifications();
   const ui = useUI();
+  const currentTab = useDashboardTabName();
+  const setCurrentTab = useSetDashboardTab();
   const sync = useSync();
   const migration = useMigration();
 
@@ -52,6 +55,8 @@ export const useAppContext = () => {
     ...settings,
     ...notifications,
     ...ui,
+    currentTab,
+    setCurrentTab,
     ...sync,
     ...migration,
   };

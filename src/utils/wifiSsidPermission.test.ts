@@ -1,6 +1,11 @@
 import { PermissionsAndroid, Platform } from 'react-native';
 import * as Location from 'expo-location';
-import { ensureWifiSsidPermission, getWifiSsidPermissionStatus } from './wifiSsidPermission';
+import {
+  canReadWifiSsid,
+  ensureWifiSsidPermission,
+  getWifiSsidPermissionStatus,
+  isWifiSsidNativeAvailable,
+} from './wifiSsidPermission';
 import { suppressAutoLogout } from './autoLogoutGuard';
 
 jest.mock('./autoLogoutGuard', () => ({
@@ -11,6 +16,31 @@ jest.mock('expo-location', () => ({
   getForegroundPermissionsAsync: jest.fn(),
   requestForegroundPermissionsAsync: jest.fn(),
 }));
+
+describe('canReadWifiSsid', () => {
+  afterEach(() => {
+    jest.restoreAllMocks();
+  });
+
+  it('does not offer the network name on Android 13+ where location is capped at API 32', () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    jest.spyOn(Platform, 'Version', 'get').mockReturnValue(33);
+    expect(canReadWifiSsid()).toBe(false);
+    expect(isWifiSsidNativeAvailable()).toBe(false);
+  });
+
+  it('offers the network name on Android 12 and on iOS', () => {
+    jest.replaceProperty(Platform, 'OS', 'android');
+    jest.spyOn(Platform, 'Version', 'get').mockReturnValue(32);
+    expect(canReadWifiSsid()).toBe(true);
+    expect(isWifiSsidNativeAvailable()).toBe(true);
+
+    jest.replaceProperty(Platform, 'OS', 'ios');
+    jest.spyOn(Platform, 'Version', 'get').mockReturnValue('17.0');
+    expect(canReadWifiSsid()).toBe(true);
+    expect(isWifiSsidNativeAvailable()).toBe(true);
+  });
+});
 
 describe('ensureWifiSsidPermission', () => {
   beforeEach(() => {

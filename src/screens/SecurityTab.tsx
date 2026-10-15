@@ -5,7 +5,6 @@ import React, { useCallback, useEffect, useState } from 'react';
 import {
   View,
   Text,
-  ScrollView,
   TouchableOpacity,
   Switch,
   Platform,
@@ -22,7 +21,10 @@ import { useAuth } from '../context/AuthContext';
 import { useSync } from '../context/SyncContext';
 import { useMigration } from '../context/MigrationContext';
 import { globalStyles as styles } from '../styles/globalStyles';
+import { ACCENT_SELECTED_ALPHA, withAlpha } from '../styles/colors';
 import { estimateTabBarScrollPadding } from '../navigation/tabBarInset';
+import { DashboardScrollView } from '../navigation/DashboardScrollView';
+import { FrozenDashboardTab } from '../navigation/FrozenDashboardTab';
 import { exportLocalBackup, exportCardsCsvShare, exportCardsJsonShare } from '../services/backup';
 import { cardsWithVaultSecrets } from '../services/vaultSecrets';
 import {
@@ -46,6 +48,19 @@ import {
   type ExportErrorCode,
 } from '../services/exportsStorage';
 import {
+  loadAutoBackupPrefs,
+  setAutoBackupEnabled,
+  setAutoBackupInterval,
+} from '../services/autoBackupPrefs';
+import {
+  AUTO_BACKUP_DEFAULT_INTERVAL,
+  AUTO_BACKUP_INTERVAL_VALUES,
+  type AutoBackupInterval,
+} from '../services/autoBackupPolicy';
+import { runAutoBackup } from '../services/autoBackupRun';
+import { syncAutoBackupNativeSchedule } from '../services/autoBackupTask';
+import { ensureOsNotificationPermissions } from '../notifications/osNotificationService';
+import {
   getAutofillPlatformSupport,
   isAutofillServiceEnabled,
   openAutofillSettings,
@@ -65,7 +80,7 @@ function formatSessionCreated(iso: string): string {
   return d.toLocaleDateString();
 }
 
-export const SecurityTab = () => {
+function SecurityTabContent(): React.JSX.Element {
   const { isLogged, db, setCustomPrompt, setCustomPromptInput } = useCoreState();
   const { c, t, handleToggleSettingsOption } = useSettings();
   const insets = useSafeAreaInsets();
@@ -80,6 +95,11 @@ export const SecurityTab = () => {
   const [helpProcedureId, setHelpProcedureId] = useState<ProcedureId | null>(null);
   const [exportsRefreshToken, setExportsRefreshToken] = useState(0);
   const [exportBusy, setExportBusy] = useState(false);
+  const [autoBackupEnabled, setAutoBackupEnabledState] = useState(false);
+  const [autoBackupInterval, setAutoBackupIntervalState] = useState<AutoBackupInterval>(
+    AUTO_BACKUP_DEFAULT_INTERVAL
+  );
+  const [autoBackupNotifyDenied, setAutoBackupNotifyDenied] = useState(false);
   const autofillSupport = getAutofillPlatformSupport();
   const [autofillEnabled, setAutofillEnabled] = useState<boolean | null>(null);
 
@@ -180,6 +200,13 @@ export const SecurityTab = () => {
     });
     return () => sub.remove();
   }, [refreshAutofillStatus]);
+
+  useEffect(() => {
+    void loadAutoBackupPrefs().then((prefs) => {
+      setAutoBackupEnabledState(prefs.enabled);
+      setAutoBackupIntervalState(prefs.interval);
+    });
+  }, []);
   const {
     nativeSyncAvailable,
     webServerEnabled,
@@ -244,6 +271,40 @@ export const SecurityTab = () => {
     }, t.require_auth_export_backup);
   };
 
+  const handleToggleAutoBackup = (enable: boolean) => {
+    void (async () => {
+      if (!enable) {
+        await setAutoBackupEnabled(false);
+        setAutoBackupEnabledState(false);
+        setAutoBackupNotifyDenied(false);
+        await syncAutoBackupNativeSchedule();
+        return;
+      }
+      await setAutoBackupEnabled(true);
+      setAutoBackupEnabledState(true);
+      await syncAutoBackupNativeSchedule();
+      const granted = await ensureOsNotificationPermissions(
+        t.web_notif_block_action,
+        t.web_notif_deny_action,
+        t.auto_backup_share_action
+      );
+      setAutoBackupNotifyDenied(!granted);
+      await runAutoBackup('enable');
+      bumpExportsList();
+    })();
+  };
+
+  const handleSetAutoBackupInterval = (interval: AutoBackupInterval) => {
+    setAutoBackupIntervalState(interval);
+    void setAutoBackupInterval(interval).then(() => syncAutoBackupNativeSchedule());
+  };
+
+  const autoBackupIntervalLabel = (value: AutoBackupInterval): string => {
+    if (value === '1M') return t.auto_backup_interval_1m;
+    if (value === '7D') return t.auto_backup_interval_7d;
+    return t.auto_backup_interval_24h;
+  };
+
   const notifyDeviceSecretEnableFailed = () => {
     notifications.toast({
       title: t.device_secret_title,
@@ -252,39 +313,86 @@ export const SecurityTab = () => {
     });
   };
 
+  /**
+   * Order matters for crash safety: the vault on disk is rewritten with the
+   * mixed root *before* the biometric bundle is rotated. A failed disk write
+   * restores the previous session root and deletes the secret that was just
+   * stored. Once that write returns true, later failures must not delete the
+   * secret: the file is already mixed, and rolling it back would drop the
+   * only on-device copy before the recovery kit is shown.
+   */
   const runEnableDeviceSecret = async () => {
+    let secretStored = false;
+    let vaultCommitted = false;
+    let recoveryKit: string | null = null;
+    let previousRoot: { rootHex: string; kdfSalt: string } | null = null;
+    const rollback = async () => {
+      if (previousRoot) {
+        setSessionRootKey(previousRoot.rootHex, previousRoot.kdfSalt);
+        await whenSessionNativeAttached();
+      }
+      if (secretStored) {
+        await disableDeviceSecret().catch(() => undefined);
+      }
+    };
+    const showRecoveryKit = () => {
+      if (!recoveryKit) return;
+      notifications.alert({
+        title: t.device_secret_recovery_title,
+        message: `${t.device_secret_recovery_body}\n\n${recoveryKit}`,
+        variant: 'warning',
+      });
+    };
     try {
       const kit = await enableDeviceSecret(t.require_auth_device_secret);
       if (!kit) {
         notifyDeviceSecretEnableFailed();
         return;
       }
+      secretStored = true;
+      recoveryKit = kit;
       const rootHex = await exportSessionRootKeyHex();
       const kdfSalt = getSessionKdfSalt();
       const secretHex = parseRecoveryKit(kit);
       if (!rootHex || !kdfSalt || !secretHex) {
+        await rollback();
         notifyDeviceSecretEnableFailed();
         return;
       }
+      previousRoot = { rootHex, kdfSalt };
       const mixedRoot = mixRootWithSecret(rootHex, secretHex);
       setSessionRootKey(mixedRoot, kdfSalt);
       await whenSessionNativeAttached();
-      if (db.passwordHash) {
-        await replaceUnlockCredentials(mixedRoot, kdfSalt, db.passwordHash);
-      }
       const nextDb = {
         ...db,
         settings: { ...db.settings, bindDeviceSecret: true },
         last_update: new Date().toISOString(),
       };
-      await writeDatabaseToDisk(nextDb, true);
-      notifications.alert({
-        title: t.device_secret_recovery_title,
-        message: `${t.device_secret_recovery_body}\n\n${kit}`,
-        variant: 'warning',
-      });
+      const written = await writeDatabaseToDisk(nextDb, true);
+      if (!written) {
+        await rollback();
+        return;
+      }
+      vaultCommitted = true;
+      if (db.passwordHash) {
+        await replaceUnlockCredentials(mixedRoot, kdfSalt, db.passwordHash);
+      }
+      showRecoveryKit();
     } catch (err) {
-      if (isUserCanceledAuth(err)) return;
+      if (vaultCommitted) {
+        console.warn('[SecurityTab] device secret committed; skipping rollback', err);
+        try {
+          showRecoveryKit();
+        } catch (alertErr) {
+          console.warn('[SecurityTab] recovery kit alert failed', alertErr);
+        }
+        return;
+      }
+      if (isUserCanceledAuth(err)) {
+        if (secretStored) await rollback();
+        return;
+      }
+      await rollback();
       notifyDeviceSecretEnableFailed();
     }
   };
@@ -292,9 +400,12 @@ export const SecurityTab = () => {
   const handleToggleDeviceSecret = (enable: boolean) => {
     if (!isLogged || !db?.salt) return;
     if (enable) {
-      // Android Keystore already prompts BIOMETRIC_STRONG on store. A prior
-      // expo-local-authentication dialog was a second, redundant fingerprint.
-      // iOS SecItemAdd with biometryCurrentSet does not prompt on write.
+      // Android prompts twice: storeDeviceSecret, then storeUnlockBundle
+      // (two Keystore aliases, each BIOMETRIC_STRONG). A prior
+      // expo-local-authentication dialog was a third prompt.
+      // iOS SecItemAdd does not prompt. The dialog below is LocalAuthentication
+      // only and is not the Keychain ACL. The bundle uses biometryCurrentSet;
+      // the secret uses biometryAny.
       if (Platform.OS === 'android') {
         void runEnableDeviceSecret();
       } else {
@@ -315,6 +426,14 @@ export const SecurityTab = () => {
         const salt = db.salt;
         if (!pass.trim() || !salt) return;
         void (async () => {
+          const mixedRoot = await exportSessionRootKeyHex();
+          const mixedSalt = getSessionKdfSalt();
+          const restoreMixedSession = async () => {
+            if (mixedRoot && mixedSalt) {
+              setSessionRootKey(mixedRoot, mixedSalt);
+              await whenSessionNativeAttached();
+            }
+          };
           try {
             const ok = await adoptSessionIfPasswordMatches(pass, salt, db.passwordHash);
             if (!ok) {
@@ -322,13 +441,11 @@ export const SecurityTab = () => {
               return;
             }
             setCustomPrompt((prev) => ({ ...prev, visible: false }));
-            await disableDeviceSecret();
-            const unboundRoot = await exportSessionRootKeyHex();
-            const unboundSalt = getSessionKdfSalt();
-            if (unboundRoot && unboundSalt && db.passwordHash) {
-              await replaceUnlockCredentials(unboundRoot, unboundSalt, db.passwordHash);
-            }
-            await writeDatabaseToDisk(
+            // Rewrite the vault with the unbound root first; only once the
+            // file no longer needs the secret is it removed from hardware.
+            // A kill in between leaves an unbound vault plus an orphan
+            // secret, which the next unlock ignores.
+            const written = await writeDatabaseToDisk(
               {
                 ...db,
                 settings: { ...db.settings, bindDeviceSecret: false },
@@ -336,7 +453,18 @@ export const SecurityTab = () => {
               },
               true
             );
+            if (!written) {
+              await restoreMixedSession();
+              return;
+            }
+            await disableDeviceSecret();
+            const unboundRoot = await exportSessionRootKeyHex();
+            const unboundSalt = getSessionKdfSalt();
+            if (unboundRoot && unboundSalt && db.passwordHash) {
+              await replaceUnlockCredentials(unboundRoot, unboundSalt, db.passwordHash);
+            }
           } catch {
+            await restoreMixedSession();
             setCustomPrompt((prev) => ({ ...prev, error: t.wrong_key_p }));
           }
         })();
@@ -361,7 +489,7 @@ export const SecurityTab = () => {
   };
 
   return (
-    <ScrollView
+    <DashboardScrollView
       contentContainerStyle={[
         styles.statsPanelContainerScrollBody,
         { paddingBottom: estimateTabBarScrollPadding(insets.bottom) },
@@ -400,6 +528,8 @@ export const SecurityTab = () => {
                     alignItems: 'center',
                   }}
                   onPress={() => reactivateWebServer()}
+                  accessibilityRole="button"
+                  accessibilityLabel={t.web_access_reactivate_btn}
                 >
                   <Text style={{ color: '#fff', fontWeight: '700' }}>
                     {t.web_access_reactivate_btn}
@@ -415,6 +545,8 @@ export const SecurityTab = () => {
                     alignItems: 'center',
                   }}
                   onPress={dismissWebReactivate}
+                  accessibilityRole="button"
+                  accessibilityLabel={t.web_access_reactivate_dismiss}
                 >
                   <Text style={{ color: c.textMuted, fontWeight: '600' }}>
                     {t.web_access_reactivate_dismiss}
@@ -533,6 +665,7 @@ export const SecurityTab = () => {
                             fontWeight: webClientAliases[sid] ? '600' : '400',
                           }}
                           numberOfLines={1}
+                          accessibilityLabel={webClientAliases[sid] || sid}
                         >
                           {webClientAliases[sid] || sid}
                         </Text>
@@ -540,6 +673,7 @@ export const SecurityTab = () => {
                           <Text
                             style={{ fontSize: 11, color: c.textMuted, fontFamily: 'monospace' }}
                             numberOfLines={1}
+                            accessibilityLabel={sid}
                           >
                             {sid}
                           </Text>
@@ -550,9 +684,18 @@ export const SecurityTab = () => {
                           borderWidth: 1,
                           borderColor: c.success,
                           borderRadius: 6,
-                          padding: 4,
+                          padding: 8,
+                          minWidth: 44,
+                          minHeight: 44,
+                          alignItems: 'center',
+                          justifyContent: 'center',
                         }}
                         onPress={() => unblockDevice(sid)}
+                        accessibilityRole="button"
+                        accessibilityLabel={t.web_unblock_client.replace(
+                          '{name}',
+                          webClientAliases[sid] || sid
+                        )}
                       >
                         <Ionicons name="checkmark-outline" size={12} color={c.success} />
                       </TouchableOpacity>
@@ -581,6 +724,7 @@ export const SecurityTab = () => {
                       <Text
                         style={{ flex: 1, fontSize: 12, color: c.text, fontFamily: 'monospace' }}
                         numberOfLines={1}
+                        accessibilityLabel={ip}
                       >
                         {ip}
                       </Text>
@@ -589,9 +733,15 @@ export const SecurityTab = () => {
                           borderWidth: 1,
                           borderColor: c.success,
                           borderRadius: 6,
-                          padding: 4,
+                          padding: 8,
+                          minWidth: 44,
+                          minHeight: 44,
+                          alignItems: 'center',
+                          justifyContent: 'center',
                         }}
                         onPress={() => unblockIp(ip)}
+                        accessibilityRole="button"
+                        accessibilityLabel={t.web_unblock_ip.replace('{ip}', ip)}
                       >
                         <Ionicons name="checkmark-outline" size={12} color={c.success} />
                       </TouchableOpacity>
@@ -695,6 +845,9 @@ export const SecurityTab = () => {
           ]}
           onPress={openMigrationSend}
           disabled={!nativeMigrationAvailable || !isLogged}
+          accessibilityRole="button"
+          accessibilityLabel={t.migration_send_btn}
+          accessibilityState={{ disabled: !nativeMigrationAvailable || !isLogged }}
         >
           <Ionicons
             name="arrow-forward-outline"
@@ -718,6 +871,9 @@ export const SecurityTab = () => {
           ]}
           onPress={openMigrationReceive}
           disabled={!nativeMigrationAvailable}
+          accessibilityRole="button"
+          accessibilityLabel={t.migration_receive_btn}
+          accessibilityState={{ disabled: !nativeMigrationAvailable }}
         >
           <Ionicons name="download-outline" size={18} color={c.text} style={{ marginRight: 8 }} />
           <Text style={[styles.secGhostOutlineText, { color: c.text }]}>
@@ -740,6 +896,83 @@ export const SecurityTab = () => {
         >
           {t.backup_export_desc}
         </Text>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            marginBottom: 12,
+            gap: 12,
+          }}
+        >
+          <View style={{ flex: 1 }}>
+            <Text style={[styles.settingRowLabelBoldTitle, { color: c.text }]}>
+              {t.auto_backup_title}
+            </Text>
+            <Text style={[styles.settingRowMutedSubTextDesc, { color: c.textMuted }]}>
+              {t.auto_backup_desc}
+            </Text>
+            {autoBackupEnabled && autoBackupNotifyDenied ? (
+              <Text style={[styles.settingRowMutedSubTextDesc, { color: c.warning, marginTop: 4 }]}>
+                {t.auto_backup_notify_denied}
+              </Text>
+            ) : null}
+          </View>
+          <Switch
+            value={autoBackupEnabled}
+            onValueChange={handleToggleAutoBackup}
+            trackColor={{ false: '#767577', true: c.success }}
+            thumbColor={Platform.OS === 'ios' ? '#FFFFFF' : '#F4F3F4'}
+            accessibilityRole="switch"
+            accessibilityLabel={t.auto_backup_title}
+          />
+        </View>
+        <View style={{ marginBottom: 12 }}>
+          <Text
+            style={[styles.settingRowMutedSubTextDesc, { color: c.textMuted, marginBottom: 8 }]}
+          >
+            {t.auto_backup_interval_label}
+          </Text>
+          <View style={styles.horizontalPillsSegmentControls}>
+            {AUTO_BACKUP_INTERVAL_VALUES.map((value) => {
+              const stored = autoBackupInterval === value;
+              const live = autoBackupEnabled && stored;
+              return (
+                <TouchableOpacity
+                  key={value}
+                  style={[
+                    styles.segmentButtonOption,
+                    {
+                      borderColor: live ? c.accent : stored ? c.textMuted : c.border,
+                      backgroundColor: live
+                        ? withAlpha(c.accent, ACCENT_SELECTED_ALPHA)
+                        : 'transparent',
+                    },
+                  ]}
+                  onPress={() => handleSetAutoBackupInterval(value)}
+                  disabled={!autoBackupEnabled}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: stored, disabled: !autoBackupEnabled }}
+                  accessibilityLabel={autoBackupIntervalLabel(value)}
+                >
+                  <Text
+                    style={[
+                      styles.segmentOptionTextLabel,
+                      {
+                        color: live ? c.accent : stored ? c.text : c.textMuted,
+                        fontSize: 10,
+                      },
+                    ]}
+                  >
+                    {autoBackupIntervalLabel(value)}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+          <Text style={[styles.settingRowMutedSubTextDesc, { color: c.textMuted, marginTop: 8 }]}>
+            {t.auto_backup_os_hint}
+          </Text>
+        </View>
         <TouchableOpacity
           style={[
             styles.secGhostOutlineButton,
@@ -752,6 +985,9 @@ export const SecurityTab = () => {
           ]}
           onPress={handleExportLocalBackup}
           disabled={exportBusy}
+          accessibilityRole="button"
+          accessibilityLabel={t.local_backup_btn}
+          accessibilityState={{ disabled: exportBusy }}
         >
           <Ionicons name="download-outline" size={18} color={c.text} style={{ marginRight: 8 }} />
           <Text style={[styles.secGhostOutlineText, { color: c.text }]}>{t.local_backup_btn}</Text>
@@ -769,6 +1005,9 @@ export const SecurityTab = () => {
           ]}
           onPress={() => confirmPlaintextExport('csv')}
           disabled={!isLogged || exportBusy}
+          accessibilityRole="button"
+          accessibilityLabel={t.export_csv_btn}
+          accessibilityState={{ disabled: !isLogged || exportBusy }}
         >
           <Ionicons name="grid-outline" size={18} color={c.text} style={{ marginRight: 8 }} />
           <Text style={[styles.secGhostOutlineText, { color: c.text }]}>{t.export_csv_btn}</Text>
@@ -786,6 +1025,9 @@ export const SecurityTab = () => {
           ]}
           onPress={() => confirmPlaintextExport('json')}
           disabled={!isLogged || exportBusy}
+          accessibilityRole="button"
+          accessibilityLabel={t.export_json_btn}
+          accessibilityState={{ disabled: !isLogged || exportBusy }}
         >
           <Ionicons name="code-slash-outline" size={18} color={c.text} style={{ marginRight: 8 }} />
           <Text style={[styles.secGhostOutlineText, { color: c.text }]}>{t.export_json_btn}</Text>
@@ -831,6 +1073,8 @@ export const SecurityTab = () => {
             { borderColor: c.border, paddingVertical: 12, justifyContent: 'center' },
           ]}
           onPress={onImportPress}
+          accessibilityRole="button"
+          accessibilityLabel={t.import_action}
         >
           <Ionicons
             name="document-text-outline"
@@ -853,6 +1097,9 @@ export const SecurityTab = () => {
           ]}
           onPress={() => setImportWizardOpen(true)}
           disabled={!isLogged}
+          accessibilityRole="button"
+          accessibilityLabel={t.import_manager_title}
+          accessibilityState={{ disabled: !isLogged }}
         >
           <Ionicons
             name="folder-open-outline"
@@ -919,6 +1166,10 @@ export const SecurityTab = () => {
                 { borderColor: c.border, paddingVertical: 12, justifyContent: 'center' },
               ]}
               onPress={() => void openAutofillSettings()}
+              accessibilityRole="button"
+              accessibilityLabel={
+                autofillEnabled === true ? t.autofill_open_settings : t.autofill_enable_btn
+              }
             >
               <Ionicons
                 name="settings-outline"
@@ -939,6 +1190,8 @@ export const SecurityTab = () => {
               { borderColor: c.border, paddingVertical: 12, justifyContent: 'center' },
             ]}
             onPress={() => void openAutofillSettings()}
+            accessibilityRole="button"
+            accessibilityLabel={t.autofill_open_settings}
           >
             <Ionicons name="settings-outline" size={18} color={c.text} style={{ marginRight: 8 }} />
             <Text style={[styles.secGhostOutlineText, { color: c.text }]}>
@@ -1066,6 +1319,15 @@ export const SecurityTab = () => {
         onClose={() => setImportWizardOpen(false)}
         onImport={handleImportExternalCards}
       />
-    </ScrollView>
+    </DashboardScrollView>
   );
-};
+}
+
+/** Security tab. React renders suspend while another dashboard tab is focused. */
+export function SecurityTab(): React.JSX.Element {
+  return (
+    <FrozenDashboardTab>
+      <SecurityTabContent />
+    </FrozenDashboardTab>
+  );
+}

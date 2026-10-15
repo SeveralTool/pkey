@@ -41,6 +41,14 @@ describe('migrationProtocol', () => {
     expect(parsed?.pairingSecret).toBe(ps);
   });
 
+  it('does not embed a retired 16-char pairing code', () => {
+    expect(buildMigrationQrPayload('192.168.1.10', MIGRATION_PORT, 'abc', 'ABCDEF1234567890')).toBe(
+      ''
+    );
+    const qr = 'pkey-migrate://192.168.1.10:7393?sid=abc&ps=ABCDEF1234567890';
+    expect(parseMigrationQrPayload(qr)).toBeNull();
+  });
+
   it('rejects QR without pairing secret', () => {
     const qr = `pkey-migrate://192.168.1.10:7393?sid=abc123`;
     expect(parseMigrationQrPayload(qr)).toBeNull();

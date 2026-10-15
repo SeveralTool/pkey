@@ -85,7 +85,7 @@ flowchart TD
   peers -->|"hashes differ: sync_pull_request"| master
 ```
 
-`SYNC_PROTOCOL_VERSION` is **3**. `sync_pull_request` and `server_push` `{ versionHash, settingsHash }` are additive. An older PWA may still send an empty `sync_push` as a pull; the master treats it as a no-op write. HMAC login remains accepted when the satellite omits `spakeShare` (protocol v2 grace).
+`SYNC_PROTOCOL_VERSION` is **3**. `sync_pull_request` and `server_push` `{ versionHash, settingsHash }` are additive. An older PWA may still send an empty `sync_push` as a pull; the master treats it as a no-op write. HMAC login remains accepted only for satellites that announce protocol **2** and omit `spakeShare` (v2 grace); a peer that claims v3 must send a SPAKE2 share, and a peer that sends one is bound to v3 for the session no matter which version field it carried. `MIN_SUPPORTED_PROTOCOL` is **2** (v1 plaintext-token wire retired); there is no automatic sunset date — raising it to 3 ends the grace. The master picks the reply wire (XChaCha vs AES-CBC+HMAC) from the strongest envelope the session has demonstrated, never from the clear-text `protocolVersion` field alone.
 
 ## Autofill / link grouping
 

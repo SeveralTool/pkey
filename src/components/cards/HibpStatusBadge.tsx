@@ -10,6 +10,8 @@ import React from 'react';
 import { View, Text } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { PasswordCard } from '../../types';
+import type { LocaleStrings } from '../../constants/localization';
+import type { ThemeColors } from '../../styles/colors';
 import { globalStyles as styles } from '../../styles/globalStyles';
 import { primaryPassword, pwHashFor } from '../../services/hibpOrchestrator';
 
@@ -28,8 +30,8 @@ export const getHibpBadgeKind = (card: PasswordCard): HibpBadgeKind => {
 
 export type HibpStatusBadgeProps = {
   card: PasswordCard;
-  c: Record<string, string>;
-  t: Record<string, string>;
+  c: ThemeColors;
+  t: LocaleStrings;
   enabled: boolean;
 };
 

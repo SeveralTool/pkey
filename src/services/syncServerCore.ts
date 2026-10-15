@@ -65,6 +65,8 @@ import {
   wrapUnlockGrant,
   parseUnlockRequest,
   parseUnlockCancel,
+  isAeadWireEnvelope,
+  SPAKE2_PROTOCOL,
 } from '@pkey/core';
 import {
   ChallengeStore,
@@ -564,6 +566,14 @@ export class SyncServerCore {
       this.emit('protocol_mismatch', sourceId);
       return { error: 'Incompatible protocol version', code: 'PROTOCOL_MISMATCH' };
     }
+    if (req.protocolVersion >= SPAKE2_PROTOCOL && !req.spakeShare) {
+      // A v3 peer must finish the PAKE. Falling back to HMAC(passwordHash)
+      // would hand a LAN observer an offline guessing oracle; only genuine
+      // v2 satellites get that grace, and it costs a strike like any failure.
+      this.recordAuthFailure(sourceId, clientIp);
+      this.emit('auth_failure', sourceId);
+      return { error: 'Authentication failed', code: 'AUTH_FAILED' };
+    }
     const ok = req.spakeShare
       ? this.challenges.verifySpake2(sourceId, req.spakeShare, req.response, this.passwordHash) !==
         null
@@ -690,7 +700,10 @@ export class SyncServerCore {
           ...replaced.extraTombstones,
         ])
       );
+      // The chooser authorised exactly one replace; later pushes from this
+      // satellite go back to LWW merge until the user picks the PWA again.
       this.pendingForkSources.delete(sourceId);
+      this.replaceVaultSources.delete(sourceId);
     } else {
       const merged = mergeCards(
         localDb.cards || [],
@@ -887,7 +900,12 @@ export class SyncServerCore {
             } else {
               _token = result.token;
               _authenticated = true;
-              _clientProtocol = peerVersion;
+              // A SPAKE2 share proves a v3 client even if the (unauthenticated)
+              // version field was lowered in transit; never let that field pick
+              // the weaker v2 wire for the rest of the session.
+              _clientProtocol = authReq.spakeShare
+                ? Math.max(peerVersion, SPAKE2_PROTOCOL)
+                : peerVersion;
               if (usesEncryptedSyncWire(peerVersion)) {
                 send({
                   type: 'auth_ok',
@@ -918,8 +936,8 @@ export class SyncServerCore {
             }
             const sid = _sourceId || 'web-unknown';
             if (rejectIfBlocked(sid)) return;
-            const peerVersion = (msg.protocolVersion as number) || _clientProtocol;
-            if (!isProtocolCompatible(peerVersion)) {
+            const claimedVersion = (msg.protocolVersion as number) || _clientProtocol;
+            if (!isProtocolCompatible(claimedVersion)) {
               send({
                 type: 'error',
                 code: 'PROTOCOL_MISMATCH',
@@ -927,6 +945,15 @@ export class SyncServerCore {
               });
               return;
             }
+            // Reply with the strongest wire the session has demonstrated: the
+            // version bound at auth, or an AEAD envelope on this very message.
+            // The outer `protocolVersion` field travels in the clear and must
+            // not be able to downgrade the response to AES-CBC + HMAC.
+            const peerVersion = Math.max(
+              claimedVersion,
+              _clientProtocol,
+              isAeadWireEnvelope(msg.encryptedPayload) ? SPAKE2_PROTOCOL : 0
+            );
 
             let token = _token;
             let payload: any = msg.payload;

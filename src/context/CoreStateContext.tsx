@@ -22,6 +22,7 @@ import {
   setMasterPassword as setMasterPasswordVault,
   subscribeMasterPassword,
 } from '../services/masterPasswordVault';
+import { loadPublicUiPrefs, getCachedPublicUiPrefs } from '../utils/publicUiPrefs';
 
 const INITIAL_DB: EncryptedDatabase = createEmptySessionDatabase();
 
@@ -37,6 +38,8 @@ export interface CustomPromptState {
   placeholder?: string;
   maxLength?: number;
   onConfirm: (input: string) => void;
+  /** Cancel, backdrop, or hardware back. Not called after a successful confirm. */
+  onDismiss?: () => void;
 }
 
 /** Filter applied when navigating from Stats metrics into the Cards tab. */
@@ -195,17 +198,43 @@ export const CoreStateProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     let active = true;
     let hideTask: { cancel?: () => void } | undefined;
     (async () => {
+      let prefs = getCachedPublicUiPrefs();
       try {
-        const exists = await checkDatabaseExists();
+        const [exists, loaded] = await Promise.all([checkDatabaseExists(), loadPublicUiPrefs()]);
         if (!active) return;
+        prefs = loaded;
         setHasSession(exists);
         setSessionGate('ready');
       } catch (err) {
         console.error('[CoreState] session check failed:', err);
         if (!active) return;
         setSessionGate('error');
+        try {
+          prefs = await loadPublicUiPrefs();
+        } catch {
+          // keep cached / new-install defaults
+        }
       }
       if (!active) return;
+      setDb((prev) => {
+        if (prev.passwordHash) return prev;
+        if (
+          prev.settings.theme === prefs.theme &&
+          prev.settings.language === prefs.language &&
+          prev.settings.allowScreenshots === prefs.allowScreenshots
+        ) {
+          return prev;
+        }
+        return {
+          ...prev,
+          settings: {
+            ...prev.settings,
+            theme: prefs.theme,
+            language: prefs.language,
+            allowScreenshots: prefs.allowScreenshots,
+          },
+        };
+      });
       hideTask = InteractionManager.runAfterInteractions(() => {
         requestAnimationFrame(() => {
           requestAnimationFrame(() => {
@@ -218,7 +247,7 @@ export const CoreStateProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       active = false;
       hideTask?.cancel?.();
     };
-  }, []);
+  }, [setDb]);
 
   // Memoized so consumers only re-render when a field they read actually
   // changes reference; an inline object here would invalidate every consumer

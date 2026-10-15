@@ -17,9 +17,27 @@ let locationApi: LocationApi | null | undefined;
 
 const NEARBY_WIFI_DEVICES = 'android.permission.NEARBY_WIFI_DEVICES';
 
-/** Android 13+ can read SSID with nearby-Wi-Fi instead of location. */
+/**
+ * Android 13+ requests `NEARBY_WIFI_DEVICES` instead of location. Note that
+ * this permission does **not** unlock the SSID: `WifiInfo.getSSID()` needs the
+ * same permissions as `getScanResults()` (fine location), which this build
+ * declares only up to API 32 (`plugins/with-wifi-ssid-permissions`). See
+ * {@link canReadWifiSsid}.
+ */
 export function usesNearbyWifiDevicesPermission(): boolean {
   return Platform.OS === 'android' && Number(Platform.Version) >= 33;
+}
+
+/**
+ * True when the OS can actually hand the SSID to this build once the permission
+ * is granted. On Android 13+ the app has no location permission (capped at
+ * `maxSdkVersion=32`, `NEARBY_WIFI_DEVICES` is `neverForLocation`), so the
+ * system always returns `<unknown ssid>`; asking for a permission there would
+ * promise a network name that never arrives. iOS and Android ≤12 use location.
+ */
+export function canReadWifiSsid(): boolean {
+  if (usesNearbyWifiDevicesPermission()) return false;
+  return true;
 }
 
 /**
@@ -79,8 +97,13 @@ async function requestNearbyWifi(): Promise<WifiSsidPermissionStatus> {
   }
 }
 
-/** True when a native API can request the SSID permission on this binary. */
+/**
+ * True when a native API can request the SSID permission on this binary **and**
+ * the OS will expose the SSID afterwards ({@link canReadWifiSsid}). UI uses this
+ * to decide whether to offer the "show network name" button at all.
+ */
 export function isWifiSsidNativeAvailable(): boolean {
+  if (!canReadWifiSsid()) return false;
   if (usesNearbyWifiDevicesPermission()) return true;
   return getLocationApi() != null;
 }

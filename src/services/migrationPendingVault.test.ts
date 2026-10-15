@@ -9,7 +9,7 @@ const mockSecureStore = new Map<string, string>();
 jest.mock('expo-file-system/legacy', () => ({
   documentDirectory: 'file:///docs/',
   EncodingType: { UTF8: 'utf8' },
-    getInfoAsync: jest.fn(async (uri: string) => ({ exists: mockFileStore.has(uri) })),
+  getInfoAsync: jest.fn(async (uri: string) => ({ exists: mockFileStore.has(uri) })),
   writeAsStringAsync: jest.fn(async (uri: string, contents: string) => {
     mockFileStore.set(uri, contents);
   }),
@@ -55,19 +55,25 @@ import {
   updatePendingFinalizeTarget,
   type MigrationFinalizeTarget,
 } from './migrationPendingVault';
+import { encodeCrockfordBase32 } from './migrationChannelCrypto';
 
 const PENDING_META_KEY = '@pkey/migration_pending_meta_v1';
 const PENDING_URI = `file:///docs/${PENDING_MIGRATION_FILENAME}`;
 const LIVE_URI = 'file:///docs/pkey_encrypted_db.json';
+
+const PAIRING = encodeCrockfordBase32(new Uint8Array(15).fill(0x11));
+const PAIRING_NEXT = encodeCrockfordBase32(new Uint8Array(15).fill(0x22));
+const SENDER_TLS = 'AB'.repeat(16);
 
 const TARGET: MigrationFinalizeTarget = {
   senderIp: '192.168.1.10',
   senderIpAlternates: ['192.168.1.11'],
   senderCallbackPort: 7394,
   migrationId: 'mig-1',
-  pairingSecret: 'SECRETPAIRINGCODE',
+  pairingSecret: PAIRING,
   sessionId: 'sess-1',
   senderWipeProof: 'proof-1',
+  senderTlsFingerprint: SENDER_TLS,
 };
 
 beforeEach(() => {
@@ -134,10 +140,40 @@ describe('migrationPendingVault', () => {
 
   it('updatePendingFinalizeTarget replaces the stored secret', async () => {
     await stagePendingMigration('payload', 1, TARGET);
-    await updatePendingFinalizeTarget({ ...TARGET, pairingSecret: 'NEWSECRET' });
+    await updatePendingFinalizeTarget({ ...TARGET, pairingSecret: PAIRING_NEXT });
 
-    expect(mockSecureStore.get(PENDING_PAIRING_SECRET_KEY)).toBe('NEWSECRET');
+    expect(mockSecureStore.get(PENDING_PAIRING_SECRET_KEY)).toBe(PAIRING_NEXT);
     const meta = await readPendingMigrationMeta();
-    expect(meta?.target?.pairingSecret).toBe('NEWSECRET');
+    expect(meta?.target?.pairingSecret).toBe(PAIRING_NEXT);
+  });
+
+  it('drops a retired 16-char pairing secret instead of keeping it', async () => {
+    mockAsyncStore.set(
+      PENDING_META_KEY,
+      JSON.stringify({
+        cardCount: 1,
+        createdAt: 1,
+        target: { ...TARGET, pairingSecret: 'ABCDEF1234567890' },
+      })
+    );
+
+    const meta = await readPendingMigrationMeta();
+    expect(meta?.target?.pairingSecret).toBe('');
+    expect(mockSecureStore.get(PENDING_PAIRING_SECRET_KEY)).toBeUndefined();
+    const stripped = JSON.parse(mockAsyncStore.get(PENDING_META_KEY) as string);
+    expect(stripped.target.pairingSecret).toBeUndefined();
+  });
+
+  it('rejects a staged target with no sender TLS fingerprint', async () => {
+    mockAsyncStore.set(
+      PENDING_META_KEY,
+      JSON.stringify({
+        cardCount: 1,
+        createdAt: 1,
+        target: { ...TARGET, senderTlsFingerprint: undefined },
+      })
+    );
+
+    expect(await readPendingMigrationMeta()).toBeNull();
   });
 });

@@ -19,7 +19,14 @@ import androidx.fragment.app.FragmentActivity
 class AutofillAuthActivity : FragmentActivity() {
   override fun onCreate(savedInstanceState: Bundle?) {
     super.onCreate(savedInstanceState)
+    AutofillCache.trackAuthActivity(this)
+    val generation = AutofillCache.currentGeneration()
     val entryId = intent.getStringExtra(EXTRA_ENTRY_ID) ?: run {
+      finish()
+      return
+    }
+    if (AutofillCache.passwordForSession(entryId, generation).isEmpty()) {
+      setResult(Activity.RESULT_CANCELED)
       finish()
       return
     }
@@ -34,7 +41,7 @@ class AutofillAuthActivity : FragmentActivity() {
       executor,
       object : BiometricPrompt.AuthenticationCallback() {
         override fun onAuthenticationSucceeded(result: BiometricPrompt.AuthenticationResult) {
-          deliverDataset(entryId, title, username, userId, passId)
+          deliverDataset(entryId, title, username, userId, passId, generation)
         }
 
         override fun onAuthenticationError(errorCode: Int, errString: CharSequence) {
@@ -49,6 +56,11 @@ class AutofillAuthActivity : FragmentActivity() {
       .setAllowedAuthenticators(BiometricManager.Authenticators.BIOMETRIC_STRONG)
       .build()
     prompt.authenticate(info)
+  }
+
+  override fun onDestroy() {
+    AutofillCache.untrackAuthActivity(this)
+    super.onDestroy()
   }
 
   private fun extraId(name: String): AutofillId? {
@@ -66,8 +78,14 @@ class AutofillAuthActivity : FragmentActivity() {
     username: String,
     userId: AutofillId?,
     passId: AutofillId?,
+    generation: Int,
   ) {
-    val password = AutofillCache.passwordFor(entryId)
+    val password = AutofillCache.passwordForSession(entryId, generation)
+    if (password.isEmpty()) {
+      setResult(Activity.RESULT_CANCELED)
+      finish()
+      return
+    }
     val presentation = RemoteViews(packageName, android.R.layout.simple_list_item_1).apply {
       setTextViewText(android.R.id.text1, title.ifBlank { username })
     }

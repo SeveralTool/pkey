@@ -21,7 +21,9 @@ export const VaultForkModal = () => {
   const encryptedOnly = vaultForkPrompt?.encryptedOnly === true;
   const message = encryptedOnly
     ? t.vault_fork_message_locked.replace('{phone}', String(phoneCount))
-    : t.vault_fork_message.replace('{pwa}', String(pwaCount)).replace('{phone}', String(phoneCount));
+    : t.vault_fork_message
+        .replace('{pwa}', String(pwaCount))
+        .replace('{phone}', String(phoneCount));
 
   const run = (action: 'use_pwa' | 'use_phone' | 'defer') => {
     if (busy) return;
@@ -72,6 +74,9 @@ export const VaultForkModal = () => {
       <TouchableOpacity
         onPress={() => run('use_phone')}
         disabled={busy}
+        accessibilityRole="button"
+        accessibilityLabel={t.vault_fork_use_phone}
+        accessibilityState={{ disabled: busy }}
         style={{
           backgroundColor: c.accent,
           paddingVertical: 12,
@@ -89,6 +94,9 @@ export const VaultForkModal = () => {
       <TouchableOpacity
         onPress={() => run('use_pwa')}
         disabled={busy || encryptedOnly}
+        accessibilityRole="button"
+        accessibilityLabel={t.vault_fork_use_pwa}
+        accessibilityState={{ disabled: busy || encryptedOnly }}
         style={{
           backgroundColor: c.danger,
           paddingVertical: 12,
@@ -106,6 +114,9 @@ export const VaultForkModal = () => {
       <TouchableOpacity
         onPress={() => run('defer')}
         disabled={busy}
+        accessibilityRole="button"
+        accessibilityLabel={t.vault_fork_defer}
+        accessibilityState={{ disabled: busy }}
         style={{ paddingVertical: 10, paddingHorizontal: 16, opacity: busy ? 0.4 : 1 }}
       >
         <Text style={{ color: c.textMuted, fontWeight: '700', textAlign: 'center' }}>

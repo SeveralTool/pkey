@@ -4,6 +4,7 @@
 import { useEffect, useRef } from 'react';
 import { AppState } from 'react-native';
 import type { ForegroundIdleLock } from '@pkey/core';
+import { isPwaResponseHold } from '../utils/autoLogoutGuard';
 
 const IDLE_MS: Record<Exclude<ForegroundIdleLock, 'NEVER'>, number> = {
   '1M': 60_000,
@@ -57,6 +58,11 @@ export function useForegroundIdleLock({
     const arm = (): void => {
       if (timerRef.current) clearTimeout(timerRef.current);
       timerRef.current = setTimeout(() => {
+        if (isPwaResponseHold()) {
+          lastTouchRef.current = Date.now();
+          arm();
+          return;
+        }
         if (AppState.currentState === 'active') onLogoutRef.current();
       }, timeoutMs);
     };
@@ -70,6 +76,11 @@ export function useForegroundIdleLock({
     arm();
     const sub = AppState.addEventListener('change', (next) => {
       if (next === 'active') {
+        if (isPwaResponseHold()) {
+          lastTouchRef.current = Date.now();
+          arm();
+          return;
+        }
         const elapsed = Date.now() - lastTouchRef.current;
         if (elapsed >= timeoutMs) onLogoutRef.current();
         else arm();

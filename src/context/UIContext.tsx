@@ -1,10 +1,10 @@
 /**
- * @fileoverview Transient UI state: tabs, search, cards filter, list sort, expanded card,
+ * @fileoverview Transient UI state: search, cards filter, list sort, expanded card,
  * and the custom-icon modal.
  *
- * Search keystrokes live in a separate context so typing does not re-render
- * tab chrome, DatabaseProvider, or SyncProvider. Card expand, filters, and
- * tabs stay on `UIContext`.
+ * The active dashboard tab lives in its own context so a tab switch does not
+ * re-render the cards list, database, or auth trees. Search keystrokes live in
+ * a third context so typing does not re-render tab chrome or SyncProvider.
  * Prompt state stays in CoreState (auth/database flows own it) and is
  * re-exposed here as a facade.
  */
@@ -15,8 +15,6 @@ import { navigateDashboardTab } from '../navigation/dashboardNav';
 import type { DashboardTabName } from '../navigation/types';
 
 export type UIContextData = Readonly<{
-  currentTab: DashboardTabName;
-  setCurrentTab: React.Dispatch<React.SetStateAction<DashboardTabName>>;
   /** Optional health/type filter from Stats → Cards navigation. */
   cardsFilter: CardsListFilter;
   setCardsFilter: React.Dispatch<React.SetStateAction<CardsListFilter>>;
@@ -42,12 +40,37 @@ export type UISearchContextData = Readonly<{
 
 const UIContext = createContext<UIContextData>({} as UIContextData);
 const UISearchContext = createContext<UISearchContextData>({} as UISearchContextData);
+const DashboardTabStateContext = createContext<DashboardTabName | null>(null);
+const DashboardTabActionsContext = createContext<React.Dispatch<
+  React.SetStateAction<DashboardTabName>
+> | null>(null);
 
-/** Consumes tab, filter, expand, and prompt UI state from `UIProvider`. */
+/** Consumes filter, expand, and prompt UI state from `UIProvider`. */
 export const useUI = () => useContext(UIContext);
 
 /** Consumes the cards search field. Isolated so keystrokes do not fan out. */
 export const useUISearch = () => useContext(UISearchContext);
+
+/** Active dashboard tab. Subscribing re-renders on every tab switch. */
+export function useDashboardTabName(): DashboardTabName {
+  const currentTab = useContext(DashboardTabStateContext);
+  if (currentTab === null) {
+    throw new Error('useDashboardTabName must be used within UIProvider');
+  }
+  return currentTab;
+}
+
+/**
+ * Stable tab setter. Does not subscribe to the active tab, so callers such as
+ * `App` do not re-render when the user changes tabs.
+ */
+export function useSetDashboardTab(): React.Dispatch<React.SetStateAction<DashboardTabName>> {
+  const setCurrentTab = useContext(DashboardTabActionsContext);
+  if (setCurrentTab === null) {
+    throw new Error('useSetDashboardTab must be used within UIProvider');
+  }
+  return setCurrentTab;
+}
 
 /** Owns high-churn UI state, isolated from the core store to limit re-renders. */
 export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
@@ -77,8 +100,6 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
 
   const value = useMemo(
     () => ({
-      currentTab,
-      setCurrentTab,
       cardsFilter,
       setCardsFilter,
       cardsSortMode,
@@ -93,8 +114,6 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
       setCustomPromptInput,
     }),
     [
-      currentTab,
-      setCurrentTab,
       cardsFilter,
       cardsSortMode,
       expandedCardId,
@@ -109,8 +128,12 @@ export const UIProvider: React.FC<{ children: React.ReactNode }> = ({ children }
   const searchValue = useMemo(() => ({ searchQuery, setSearchQuery }), [searchQuery]);
 
   return (
-    <UIContext.Provider value={value}>
-      <UISearchContext.Provider value={searchValue}>{children}</UISearchContext.Provider>
-    </UIContext.Provider>
+    <DashboardTabActionsContext.Provider value={setCurrentTab}>
+      <DashboardTabStateContext.Provider value={currentTab}>
+        <UIContext.Provider value={value}>
+          <UISearchContext.Provider value={searchValue}>{children}</UISearchContext.Provider>
+        </UIContext.Provider>
+      </DashboardTabStateContext.Provider>
+    </DashboardTabActionsContext.Provider>
   );
 };

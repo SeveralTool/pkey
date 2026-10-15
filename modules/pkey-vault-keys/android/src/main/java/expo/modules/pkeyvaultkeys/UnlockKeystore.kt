@@ -19,6 +19,14 @@ import javax.crypto.spec.GCMParameterSpec
 /**
  * AES-256-GCM unlock blob sealed by an AndroidKeyStore key that requires
  * BIOMETRIC_STRONG for every encrypt/decrypt (no validity window).
+ *
+ * Two aliases with different invalidation policy:
+ *  - [BUNDLE_ALIAS] (fast-unlock bundle) is invalidated when the enrolled
+ *    biometrics change; the user then falls back to the master password.
+ *  - [DEVICE_SECRET_ALIAS] (device-binding secret) is **not**: the vault on
+ *    this phone is HKDF-mixed with that secret, so losing it on a fingerprint
+ *    re-enrollment would lock the user out until they type the recovery kit.
+ *    It still requires a biometric prompt for every use.
  */
 object UnlockKeystore {
   private const val ANDROID_KEYSTORE = "AndroidKeyStore"
@@ -46,7 +54,9 @@ object UnlockKeystore {
 
   fun hardwareKind(): String {
     return try {
-      val key = getOrCreateKey(BUNDLE_ALIAS, allowCreate = false) ?: return "none"
+      val key =
+        getOrCreateKey(BUNDLE_ALIAS, allowCreate = false, invalidateOnEnrollment = true)
+          ?: return "none"
       val factory = javax.crypto.SecretKeyFactory.getInstance(key.algorithm, ANDROID_KEYSTORE)
       val info =
         factory.getKeySpec(key, android.security.keystore.KeyInfo::class.java)
@@ -73,7 +83,13 @@ object UnlockKeystore {
     val alias = if (deviceSecret) DEVICE_SECRET_ALIAS else BUNDLE_ALIAS
     val fileName = if (deviceSecret) DEVICE_SECRET_FILE else BUNDLE_FILE
     try {
-      val key = getOrCreateKey(alias, allowCreate = true) ?: error("keystore key missing")
+      // A new device secret always replaces the previous blob, so recreate its
+      // key too: this migrates aliases created by older builds (which were
+      // invalidated on enrollment change) to the current policy.
+      if (deviceSecret) deleteKey(alias)
+      val key =
+        getOrCreateKey(alias, allowCreate = true, invalidateOnEnrollment = !deviceSecret)
+          ?: error("keystore key missing")
       val cipher = Cipher.getInstance("AES/GCM/NoPadding")
       cipher.init(Cipher.ENCRYPT_MODE, key)
       authenticate(activity, promptTitle, cipher) { result ->
@@ -118,7 +134,9 @@ object UnlockKeystore {
       }
       val iv = packed.copyOfRange(0, 12)
       val ciphertext = packed.copyOfRange(12, packed.size)
-      val key = getOrCreateKey(alias, allowCreate = false) ?: error("keystore key missing")
+      val key =
+        getOrCreateKey(alias, allowCreate = false, invalidateOnEnrollment = !deviceSecret)
+          ?: error("keystore key missing")
       val cipher = Cipher.getInstance("AES/GCM/NoPadding")
       cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, iv))
       authenticate(activity, promptTitle, cipher) { result ->
@@ -127,8 +145,7 @@ object UnlockKeystore {
             try {
               onDone(Result.success(unlocked.doFinal(ciphertext)))
             } catch (e: KeyPermanentlyInvalidatedException) {
-              clearUnlockBundle(filesDir)
-              if (deviceSecret) clearDeviceSecret(filesDir)
+              onInvalidated(filesDir, deviceSecret)
               onDone(Result.failure(e))
             } catch (e: Exception) {
               onDone(Result.failure(e))
@@ -138,11 +155,21 @@ object UnlockKeystore {
         )
       }
     } catch (e: KeyPermanentlyInvalidatedException) {
-      if (deviceSecret) clearDeviceSecret(filesDir) else clearUnlockBundle(filesDir)
+      onInvalidated(filesDir, deviceSecret)
       onDone(Result.failure(e))
     } catch (e: Exception) {
       onDone(Result.failure(e))
     }
+  }
+
+  /**
+   * The fast-unlock bundle is disposable (password login recreates it), so its
+   * blob goes with the invalidated key. The device secret is the only on-device
+   * copy of the binding secret: keep the blob and let the caller fall back to
+   * the recovery kit instead of deleting data the user may still recover.
+   */
+  private fun onInvalidated(filesDir: File, deviceSecret: Boolean) {
+    if (!deviceSecret) clearUnlockBundle(filesDir)
   }
 
   /**
@@ -156,7 +183,9 @@ object UnlockKeystore {
       val packed = blob.readBytes()
       val iv = packed.copyOfRange(0, 12)
       val ciphertext = packed.copyOfRange(12, packed.size)
-      val key = getOrCreateKey(BUNDLE_ALIAS, allowCreate = false) ?: return true
+      val key =
+        getOrCreateKey(BUNDLE_ALIAS, allowCreate = false, invalidateOnEnrollment = true)
+          ?: return true
       val cipher = Cipher.getInstance("AES/GCM/NoPadding")
       cipher.init(Cipher.DECRYPT_MODE, key, GCMParameterSpec(GCM_TAG_BITS, iv))
       cipher.doFinal(ciphertext)
@@ -218,7 +247,17 @@ object UnlockKeystore {
     }
   }
 
-  private fun getOrCreateKey(alias: String, allowCreate: Boolean): SecretKey? {
+  /**
+   * Returns the alias key, creating it when [allowCreate]. [invalidateOnEnrollment]
+   * only applies at creation time: a key created by an older build keeps its
+   * original policy until the alias is deleted and recreated (e.g. the user
+   * disables and re-enables the device secret).
+   */
+  private fun getOrCreateKey(
+    alias: String,
+    allowCreate: Boolean,
+    invalidateOnEnrollment: Boolean,
+  ): SecretKey? {
     val ks = KeyStore.getInstance(ANDROID_KEYSTORE).apply { load(null) }
     val existing = ks.getKey(alias, null) as? SecretKey
     if (existing != null) return existing
@@ -229,7 +268,7 @@ object UnlockKeystore {
       .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
       .setKeySize(256)
       .setUserAuthenticationRequired(true)
-      .setInvalidatedByBiometricEnrollment(true)
+      .setInvalidatedByBiometricEnrollment(invalidateOnEnrollment)
       .setRandomizedEncryptionRequired(true)
     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
       builder.setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG)
@@ -255,7 +294,7 @@ object UnlockKeystore {
           .setEncryptionPaddings(KeyProperties.ENCRYPTION_PADDING_NONE)
           .setKeySize(256)
           .setUserAuthenticationRequired(true)
-          .setInvalidatedByBiometricEnrollment(true)
+          .setInvalidatedByBiometricEnrollment(invalidateOnEnrollment)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
           tee.setUserAuthenticationParameters(0, KeyProperties.AUTH_BIOMETRIC_STRONG)
         }

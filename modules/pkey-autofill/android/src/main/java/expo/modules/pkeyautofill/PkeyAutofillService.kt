@@ -17,6 +17,11 @@ import android.view.autofill.AutofillId
 import android.view.autofill.AutofillValue
 import android.widget.RemoteViews
 
+/**
+ * System autofill provider. Session secrets stay in [AutofillCache] until lock,
+ * logout, or boot. [onDisconnected] and [onDestroy] must not wipe that cache:
+ * the framework unbinds after [onFillRequest] and before the user confirms.
+ */
 class PkeyAutofillService : AutofillService() {
   override fun onFillRequest(
     request: FillRequest,
@@ -31,7 +36,11 @@ class PkeyAutofillService : AutofillService() {
       }
 
       val parsed = parseStructure(structure)
-      val entries = AutofillCache.read(applicationContext)
+      // Only entries whose secret is in this process's memory are offered. After a
+      // process death the encrypted metadata on disk survives but the passwords do
+      // not, and a dataset that would fill an empty password is worse than none:
+      // the user unlocks PKEY, JS re-syncs the cache, and autofill returns.
+      val entries = AutofillCache.read(applicationContext).filter { it.password.isNotEmpty() }
       val matches = AutofillCache.match(entries, parsed.webDomain, parsed.packageName)
 
       if (matches.isEmpty() || (parsed.usernameId == null && parsed.passwordId == null)) {
@@ -72,15 +81,6 @@ class PkeyAutofillService : AutofillService() {
 
   override fun onSaveRequest(request: SaveRequest, callback: SaveCallback) {
     callback.onSuccess()
-  }
-
-  override fun onDisconnected() {
-    AutofillCache.wipeSession(applicationContext)
-  }
-
-  override fun onDestroy() {
-    AutofillCache.wipeSession(applicationContext)
-    super.onDestroy()
   }
 
   private data class Parsed(

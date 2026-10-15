@@ -26,6 +26,7 @@ export * from './util/language';
 export * from './vault/settings';
 export * from './vault/secret-store';
 export * from './vault/password-generator';
+export * from './vault/listing-demo';
 export * from './vault/icon-detection';
 export * from './i18n/web';
 export * from './util/secureRandom';

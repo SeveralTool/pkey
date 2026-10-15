@@ -2,7 +2,7 @@
  * @fileoverview Tests for dashboard tab names, navigation guards, and chrome insets.
  */
 import { isDashboardTabName } from './types';
-import { shouldNavigateDashboardTab } from './dashboardNav';
+import { focusedDashboardTabName, shouldNavigateDashboardTab } from './dashboardNav';
 import {
   estimateTabBarInset,
   estimateTabBarScrollPadding,
@@ -16,6 +16,13 @@ import {
   TAB_BAR_FAB_GAP,
   estimatePillBottom,
 } from './tabBarInset';
+import {
+  estimateEdgeToEdgeScrollIndicatorTop,
+  estimateEdgeToEdgeTopPadding,
+  getDashboardTopInsetConsumed,
+  setDashboardTopInsetConsumed,
+  subscribeDashboardTopInsetConsumed,
+} from './dashboardTopInset';
 
 describe('isDashboardTabName', () => {
   it('accepts the four dashboard tabs', () => {
@@ -30,6 +37,22 @@ describe('isDashboardTabName', () => {
     expect(isDashboardTabName('')).toBe(false);
     expect(isDashboardTabName(null)).toBe(false);
     expect(isDashboardTabName(1)).toBe(false);
+  });
+});
+
+describe('focusedDashboardTabName', () => {
+  it('reads the selected tab, not a nested card editor', () => {
+    expect(
+      focusedDashboardTabName({
+        index: 0,
+        routes: [{ name: 'cards' }, { name: 'stats' }],
+      })
+    ).toBe('cards');
+  });
+
+  it('returns undefined for an empty state', () => {
+    expect(focusedDashboardTabName(undefined)).toBeUndefined();
+    expect(focusedDashboardTabName({ index: 0, routes: [] })).toBeUndefined();
   });
 });
 
@@ -68,5 +91,40 @@ describe('tabBarInset', () => {
     expect(estimateCardsListBottomPadding(34)).toBe(inset + TAB_BAR_FAB_SIZE + TAB_BAR_FAB_GAP);
     expect(estimateTabBarScrollPadding(34)).toBe(inset + 16);
     expect(estimateToastBottomPadding(34)).toBe(inset + 12);
+  });
+});
+
+describe('estimateEdgeToEdgeTopPadding', () => {
+  afterEach(() => {
+    setDashboardTopInsetConsumed(false);
+  });
+
+  it('clears the status bar when no chrome row has consumed the inset', () => {
+    expect(estimateEdgeToEdgeTopPadding(47, false, 16)).toBe(63);
+    expect(estimateEdgeToEdgeScrollIndicatorTop(47, false)).toBe(47);
+  });
+
+  it('keeps only the content pad when a banner already cleared the status bar', () => {
+    expect(estimateEdgeToEdgeTopPadding(47, true, 16)).toBe(16);
+    expect(estimateEdgeToEdgeScrollIndicatorTop(47, true)).toBe(0);
+  });
+
+  it('treats a negative inset as zero', () => {
+    expect(estimateEdgeToEdgeTopPadding(-4, false, 8)).toBe(8);
+    expect(estimateEdgeToEdgeScrollIndicatorTop(-4, false)).toBe(0);
+  });
+
+  it('notifies subscribers once per change and drops them on unsubscribe', () => {
+    const seen: boolean[] = [];
+    const unsubscribe = subscribeDashboardTopInsetConsumed(() => {
+      seen.push(getDashboardTopInsetConsumed());
+    });
+    setDashboardTopInsetConsumed(true);
+    setDashboardTopInsetConsumed(true);
+    setDashboardTopInsetConsumed(false);
+    unsubscribe();
+    setDashboardTopInsetConsumed(true);
+    expect(seen).toEqual([true, false]);
+    expect(getDashboardTopInsetConsumed()).toBe(true);
   });
 });

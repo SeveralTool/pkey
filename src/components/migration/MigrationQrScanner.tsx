@@ -24,33 +24,6 @@ try {
   /* Expo Go */
 }
 
-const SENDER_PHASES: MigrationPhase[] = [
-  'discovering',
-  'connecting',
-  'authenticating',
-  'preparing',
-  'transferring',
-  'verifying',
-  'ready_to_finalize',
-];
-const RECEIVER_PHASES: MigrationPhase[] = [
-  'discovering',
-  'connecting',
-  'authenticating',
-  'preparing',
-  'transferring',
-  'applying_cards',
-  'applying_settings',
-  'verifying',
-  'ready_to_finalize',
-  'finalizing',
-  'migration_complete',
-];
-
-const FieldHelp: React.FC<{ children: string; color: string }> = ({ children, color }) => (
-  <Text style={[s.fieldHelp, { color }]}>{children}</Text>
-);
-
 const modernScannerAvailable = (): boolean => {
   try {
     return !!CameraView?.isModernBarcodeScannerAvailable;

@@ -22,7 +22,7 @@ jest.mock('../../services/deviceSecret', () => ({
   mixDeviceSecret: jest.fn(async () => null),
 }));
 
-import { encryptVaultV4, deriveAuthVerifier } from '@pkey/core';
+import { DEFAULT_VAULT_SETTINGS, encryptVaultV4, deriveAuthVerifier } from '@pkey/core';
 import { LocalCipher } from '../../services/crypto';
 import { writeDatabaseToDisk } from '../../services/storage';
 import { establishSessionFromPassword } from '../../services/nativeVault';
@@ -44,7 +44,7 @@ function v4Db(): EncryptedDatabase {
     passwordHashScheme: 'v4-argon2',
     salt: SALT,
     sessionId: '11111111-1111-4111-8111-111111111111',
-    settings: {},
+    settings: DEFAULT_VAULT_SETTINGS,
     cards: [],
   };
 }

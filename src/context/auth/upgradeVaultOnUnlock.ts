@@ -5,7 +5,7 @@
 import { WordArray, Hex } from 'crypto-es';
 import { deriveAuthVerifier, isEnvelopeV4 } from '@pkey/core';
 import { LocalCipher } from '../../services/crypto';
-import { writeDatabaseToDisk as writeDbService } from '../../services/storage';
+import { persistVaultDisk } from '../../services/vaultPersistence';
 import { persistUnlockCredentials } from '../../services/biometrics';
 import { recordUnlockSuccess } from '../../services/unlockThrottle';
 import {
@@ -74,7 +74,7 @@ export async function upgradeVaultOnUnlock(
       passwordHash: authVerifier,
       passwordHashScheme: 'v4-argon2',
     };
-    await writeDbService(workingDb, pass);
+    await persistVaultDisk(workingDb, pass);
   } else {
     const haveMaterial =
       hasSessionKeyMaterial() &&
@@ -97,14 +97,14 @@ export async function upgradeVaultOnUnlock(
         passwordHash: await sessionAuthVerifier(),
         passwordHashScheme: 'v4-argon2',
       };
-      await writeDbService(workingDb, pass);
+      await persistVaultDisk(workingDb, pass);
     }
   }
 
   const withSession = ensureVaultSessionId(workingDb);
   if (withSession.sessionId !== workingDb.sessionId) {
     workingDb = withSession;
-    await writeDbService(workingDb, pass);
+    await persistVaultDisk(workingDb, pass);
   }
 
   const normalizedDb = {

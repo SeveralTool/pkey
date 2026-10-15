@@ -2,9 +2,10 @@
  * @fileoverview Bridge so vault lock (Auth) can stop LAN web access (Sync)
  * without a circular provider dependency. Auth sits above Sync in the tree.
  *
- * Android sticky foreground service is allowed to keep `:7392` alive while the
+ * The Android foreground service is allowed to keep `:7392` alive while the
  * phone is locked or PKEY is minimized. That path must not INSTANT-lock the
- * vault (locking the vault would tear the server down).
+ * vault (locking the vault would tear the server down). Swiping the task away
+ * stops the service natively; this bridge is only the in-process lock.
  */
 
 let lockStopHandler: (() => void) | null = null;

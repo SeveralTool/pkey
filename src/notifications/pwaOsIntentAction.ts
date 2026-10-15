@@ -10,8 +10,9 @@ export type PwaOsIntentAction = 'begin-auth' | 'deny' | 'ignore' | 'expired';
 /**
  * Maps a notification tap to an action against the in-memory prompt.
  *
- * `expired` means the vault locked, the JS process restarted, or the 30s
- * window elapsed — the ECDH grant session cannot be recovered.
+ * `expired` means the grant is gone: explicit vault lock, process restart, or
+ * the prompt window elapsed. Background / idle auto-lock must not reach this
+ * while the user is still answering the notification.
  */
 export function resolvePwaOsIntentAction(
   kind: PwaOsIntentKind,

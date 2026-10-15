@@ -4,6 +4,7 @@
 import {
   OS_WEB_BROWSER_CATEGORY,
   OS_PWA_CONFIRM_CATEGORY,
+  OS_AUTO_BACKUP_CATEGORY,
   stringifyOsNotificationData,
 } from './osNotificationData';
 import { OsNotificationChannel, OsNotificationPayload } from './types';
@@ -22,6 +23,11 @@ export const OS_CHANNELS: Record<
     description: 'Credential and vault activity notifications.',
     importance: 3,
   },
+  'pkey-backups': {
+    name: 'PKEY Backups',
+    description: 'Automatic encrypted vault backup alerts.',
+    importance: 3,
+  },
 };
 
 export const OS_NOTIFICATION_COLOR = '#87cb28';
@@ -32,6 +38,7 @@ export const buildOsNotificationContent = (payload: OsNotificationPayload) => {
   const isBrowserSynced = data.type === 'web-browser-synced';
   const isPwaConfirm = data.type === 'pwa-action-confirm';
   const isPwaUnlock = data.type === 'pwa-unlock';
+  const isAutoBackupReady = data.type === 'auto-backup-ready';
   return {
     title: payload.title,
     body: payload.body,
@@ -39,5 +46,6 @@ export const buildOsNotificationContent = (payload: OsNotificationPayload) => {
     ...(payload.channel ? { channelId: payload.channel } : {}),
     ...(isBrowserSynced ? { categoryIdentifier: OS_WEB_BROWSER_CATEGORY } : {}),
     ...(isPwaConfirm || isPwaUnlock ? { categoryIdentifier: OS_PWA_CONFIRM_CATEGORY } : {}),
+    ...(isAutoBackupReady ? { categoryIdentifier: OS_AUTO_BACKUP_CATEGORY } : {}),
   };
 };

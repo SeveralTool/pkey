@@ -2,7 +2,8 @@
  * @fileoverview Reusable component for selecting an icon for a password card.
  */
 import React from 'react';
-import { View, Text, TouchableOpacity, Modal, ScrollView } from 'react-native';
+import { View, Text, TouchableOpacity, Modal, ScrollView, useWindowDimensions } from 'react-native';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useUI } from '../../context/UIContext';
 import { useDatabase } from '../../context/DatabaseContext';
@@ -20,6 +21,10 @@ export const IconSelectorModal: React.FC = () => {
   const { customIconModal, setCustomIconModal } = useUI();
   const { handleUpdateCardValue } = useDatabase();
   const { c, isDark, t } = useSettings();
+  const { height: windowHeight } = useWindowDimensions();
+  const insets = useSafeAreaInsets();
+  const modalMaxHeight = Math.max(280, windowHeight - insets.top - insets.bottom - 32);
+  const gridMaxHeight = Math.max(160, modalMaxHeight - 148);
 
   return (
     <Modal
@@ -30,13 +35,24 @@ export const IconSelectorModal: React.FC = () => {
     >
       <View style={styles.modalBgBackdropCenteredOverlay}>
         <View
-          style={[styles.modalBoxContainer, { backgroundColor: c.cardBg, borderColor: c.border }]}
+          style={[
+            styles.modalBoxContainer,
+            {
+              backgroundColor: c.cardBg,
+              borderColor: c.border,
+              maxHeight: modalMaxHeight,
+            },
+          ]}
         >
           <Text style={[styles.modalHeadingTextTitle, { color: c.text }]}>
             {t.icon_picker_title}
           </Text>
 
-          <View style={styles.modalPresetIconsFlexGrid}>
+          <ScrollView
+            style={{ maxHeight: gridMaxHeight, flexGrow: 0 }}
+            contentContainerStyle={styles.modalPresetIconsFlexGrid}
+            keyboardShouldPersistTaps="handled"
+          >
             {PRESET_ICONS.map((icoItem) => (
               <TouchableOpacity
                 key={icoItem.key}
@@ -61,23 +77,23 @@ export const IconSelectorModal: React.FC = () => {
                   size={24}
                   color={c.accent}
                 />
-                <Text style={[styles.modalIconItemTextLabel, { color: c.textMuted }]}>
+                <Text
+                  style={[styles.modalIconItemTextLabel, { color: c.textMuted }]}
+                  numberOfLines={2}
+                >
                   {icoItem.label}
                 </Text>
               </TouchableOpacity>
             ))}
-          </View>
+          </ScrollView>
 
           <TouchableOpacity
-            style={[
-              styles.primaryActActionButton,
-              { backgroundColor: '#4b5563', paddingVertical: 10 },
-            ]}
+            style={[styles.secGhostOutlineButton, { borderColor: c.border, marginTop: 4 }]}
             onPress={() => setCustomIconModal({ visible: false, cardId: null })}
             accessibilityRole="button"
             accessibilityLabel={t.close_button}
           >
-            <Text style={styles.primaryActActionText}>{t.close_button}</Text>
+            <Text style={[styles.secGhostOutlineText, { color: c.text }]}>{t.close_button}</Text>
           </TouchableOpacity>
         </View>
       </View>

@@ -22,6 +22,7 @@ import {
   Pressable,
   StyleSheet,
   InteractionManager,
+  useWindowDimensions,
 } from 'react-native';
 import Animated from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,6 +44,7 @@ export const CustomPromptModal = () => {
     useCoreState();
   const { c, t } = useSettings();
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const inputRef = useRef<TextInput>(null);
   const { trigger: triggerShake, animatedStyle: shakeStyle } = useShakeAnimation();
   const prevError = useRef<string | undefined>(undefined);
@@ -57,8 +59,10 @@ export const CustomPromptModal = () => {
   const handleCancel = useCallback(() => {
     if (authBusy) return;
     Keyboard.dismiss();
-    setCustomPrompt((prev) => ({ ...prev, visible: false }));
-  }, [authBusy, setCustomPrompt]);
+    const dismiss = customPrompt.onDismiss;
+    setCustomPrompt((prev) => ({ ...prev, visible: false, onDismiss: undefined }));
+    dismiss?.();
+  }, [authBusy, customPrompt.onDismiss, setCustomPrompt]);
 
   const handleConfirm = () => {
     if (authBusy) return;
@@ -73,6 +77,11 @@ export const CustomPromptModal = () => {
       }
     },
     [customPrompt.error, setCustomPrompt, setCustomPromptInput]
+  );
+
+  const cardMaxHeight = Math.max(
+    220,
+    windowHeight - Math.max(insets.top, STATUS_BAR_FALLBACK) - insets.bottom - 36
   );
 
   const focusInput = useCallback(() => {
@@ -129,6 +138,7 @@ export const CustomPromptModal = () => {
               {
                 backgroundColor: c.cardBg,
                 borderColor: customPrompt.error ? c.danger : c.border,
+                maxHeight: cardMaxHeight,
               },
             ]}
           >

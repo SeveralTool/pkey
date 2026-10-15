@@ -40,9 +40,10 @@ export const ActionConfirmModal = () => {
     connectedWebClients,
     webClientAliases,
   } = useSync();
-  const { db } = useCoreState();
+  const { db, isLogged } = useCoreState();
   const { c, t } = useSettings();
   const startedForRef = useRef<string | null>(null);
+  const wasLoggedRef = useRef(isLogged);
 
   const visible = !!actionConfirmPrompt;
   const prompt = actionConfirmPrompt;
@@ -65,22 +66,18 @@ export const ActionConfirmModal = () => {
     .replace('{card}', cardTitle);
 
   useEffect(() => {
+    const justUnlocked = isLogged && !wasLoggedRef.current;
+    wasLoggedRef.current = isLogged;
     if (!prompt) {
       startedForRef.current = null;
       return;
     }
-    const startIfForeground = () => {
-      if (AppState.currentState !== 'active') return;
-      if (startedForRef.current === prompt.requestId) return;
-      startedForRef.current = prompt.requestId;
-      beginActionConfirmAuth();
-    };
-    startIfForeground();
-    const sub = AppState.addEventListener('change', (next) => {
-      if (next === 'active') startIfForeground();
-    });
-    return () => sub.remove();
-  }, [prompt, beginActionConfirmAuth]);
+    if (!isLogged) return;
+    if (startedForRef.current === prompt.requestId) return;
+    startedForRef.current = prompt.requestId;
+    if (justUnlocked || AppState.currentState !== 'active') return;
+    beginActionConfirmAuth();
+  }, [prompt, isLogged, beginActionConfirmAuth]);
 
   return (
     <KeyboardAwareBottomSheetModal
@@ -110,6 +107,8 @@ export const ActionConfirmModal = () => {
 
       <TouchableOpacity
         onPress={() => beginActionConfirmAuth()}
+        accessibilityRole="button"
+        accessibilityLabel={t.web_action_confirm_approve}
         style={{
           backgroundColor: c.accent,
           paddingVertical: 12,
@@ -125,6 +124,8 @@ export const ActionConfirmModal = () => {
 
       <TouchableOpacity
         onPress={() => resolveActionConfirm(false, 'denied')}
+        accessibilityRole="button"
+        accessibilityLabel={t.web_action_confirm_deny}
         style={{ paddingVertical: 10, paddingHorizontal: 16 }}
       >
         <Text style={{ color: c.danger, fontWeight: '700', textAlign: 'center' }}>

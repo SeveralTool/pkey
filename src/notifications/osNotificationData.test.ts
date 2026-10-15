@@ -3,9 +3,13 @@ import {
   OS_BLOCK_ACTION_ID,
   OS_DENY_ACTION_ID,
   OS_DEFAULT_ACTION_ID,
+  OS_SHARE_ACTION_ID,
   OS_WEB_BROWSER_CATEGORY,
   OS_PWA_CONFIRM_CATEGORY,
+  OS_AUTO_BACKUP_CATEGORY,
+  osNotificationResponseKey,
   parseOsNotificationData,
+  shouldDeliverOsNotificationResponse,
   stringifyOsNotificationData,
 } from './osNotificationData';
 import { buildOsNotificationContent } from './osChannels';
@@ -39,6 +43,7 @@ describe('parseOsNotificationData', () => {
       socketId: null,
       ip: null,
       requestId: null,
+      filename: null,
     });
     expect(
       parseOsNotificationData({
@@ -53,6 +58,7 @@ describe('parseOsNotificationData', () => {
       socketId: 'sock',
       ip: '10.0.0.2',
       requestId: null,
+      filename: null,
     });
     expect(parseOsNotificationData({ type: 'web-lan-changed' })).toEqual({
       type: 'web-lan-changed',
@@ -60,6 +66,7 @@ describe('parseOsNotificationData', () => {
       socketId: null,
       ip: null,
       requestId: null,
+      filename: null,
     });
     expect(
       parseOsNotificationData({
@@ -73,7 +80,43 @@ describe('parseOsNotificationData', () => {
       socketId: null,
       ip: null,
       requestId: 'req-1',
+      filename: null,
     });
+  });
+
+  it('accepts auto-backup-ready with a valid automatic filename', () => {
+    expect(
+      parseOsNotificationData({
+        type: 'auto-backup-ready',
+        filename: 'pkey-auto-20261008-162400.pkey',
+      })
+    ).toEqual({
+      type: 'auto-backup-ready',
+      sourceId: null,
+      socketId: null,
+      ip: null,
+      requestId: null,
+      filename: 'pkey-auto-20261008-162400.pkey',
+    });
+  });
+
+  it('rejects auto-backup-ready with a traversal, absolute, manual, or missing filename', () => {
+    expect(
+      parseOsNotificationData({ type: 'auto-backup-ready', filename: '../x.pkey' })
+    ).toBeNull();
+    expect(
+      parseOsNotificationData({
+        type: 'auto-backup-ready',
+        filename: 'file:///docs/exports/pkey-auto-20261008-162400.pkey',
+      })
+    ).toBeNull();
+    expect(
+      parseOsNotificationData({
+        type: 'auto-backup-ready',
+        filename: 'pkey-20260101-000000.pkey',
+      })
+    ).toBeNull();
+    expect(parseOsNotificationData({ type: 'auto-backup-ready' })).toBeNull();
   });
 });
 
@@ -85,6 +128,7 @@ describe('intentFromOsResponse', () => {
       socketId: null,
       ip: null,
       requestId: null,
+      filename: null,
       unlockedAtDispatch: false,
     });
   });
@@ -116,6 +160,7 @@ describe('intentFromOsResponse', () => {
       socketId: null,
       ip: null,
       requestId: 'req-1',
+      filename: null,
       unlockedAtDispatch: false,
     });
     expect(intentFromOsResponse(OS_DENY_ACTION_ID, data)?.kind).toBe('pwa-confirm-deny');
@@ -129,6 +174,58 @@ describe('intentFromOsResponse', () => {
     };
     expect(intentFromOsResponse(OS_DEFAULT_ACTION_ID, data)?.kind).toBe('pwa-unlock-open');
     expect(intentFromOsResponse(OS_DENY_ACTION_ID, data)?.kind).toBe('pwa-unlock-deny');
+  });
+
+  it('routes auto-backup share action to share and body tap to open', () => {
+    const data = {
+      type: 'auto-backup-ready',
+      filename: 'pkey-auto-20261008-162400.pkey',
+    };
+    expect(intentFromOsResponse(OS_SHARE_ACTION_ID, data)).toEqual({
+      kind: 'auto-backup-share',
+      sourceId: null,
+      socketId: null,
+      ip: null,
+      requestId: null,
+      filename: 'pkey-auto-20261008-162400.pkey',
+      unlockedAtDispatch: false,
+    });
+    expect(intentFromOsResponse(OS_DEFAULT_ACTION_ID, data)?.kind).toBe('auto-backup-open');
+  });
+
+  it('routes auto-backup-failed taps to open without a share action', () => {
+    expect(intentFromOsResponse(OS_SHARE_ACTION_ID, { type: 'auto-backup-failed' })?.kind).toBe(
+      'auto-backup-open'
+    );
+    expect(intentFromOsResponse(OS_DEFAULT_ACTION_ID, { type: 'auto-backup-failed' })?.kind).toBe(
+      'auto-backup-open'
+    );
+  });
+});
+
+describe('shouldDeliverOsNotificationResponse', () => {
+  const data = { type: 'pwa-unlock', sourceId: 'web-1', requestId: 'req-1' };
+  const key = osNotificationResponseKey(OS_DEFAULT_ACTION_ID, data, {
+    identifier: 'pwa-unlock',
+    date: 10,
+  });
+
+  it('drops a second delivery of the same tap', () => {
+    expect(shouldDeliverOsNotificationResponse({ key, at: 1_000 }, { key, at: 1_500 })).toBe(false);
+  });
+
+  it('accepts a later tap once the dedupe window has passed', () => {
+    expect(shouldDeliverOsNotificationResponse({ key, at: 1_000 }, { key, at: 22_000 })).toBe(true);
+  });
+
+  it('accepts a different notification immediately', () => {
+    const other = osNotificationResponseKey(OS_DEFAULT_ACTION_ID, data, {
+      identifier: 'pwa-unlock',
+      date: 11,
+    });
+    expect(shouldDeliverOsNotificationResponse({ key, at: 1_000 }, { key: other, at: 1_100 })).toBe(
+      true
+    );
   });
 });
 
@@ -205,6 +302,45 @@ describe('buildOsNotificationContent', () => {
       data: { type: 'pwa-action-confirm', sourceId: 'web-1', requestId: 'req-1' },
       channelId: 'pkey-actions',
       categoryIdentifier: OS_PWA_CONFIRM_CATEGORY,
+    });
+  });
+
+  it('adds share category and backups channel for ready alerts', () => {
+    expect(
+      buildOsNotificationContent({
+        title: 'Backup ready',
+        body: 'pkey-auto-20261008-162400.pkey',
+        channel: 'pkey-backups',
+        data: {
+          type: 'auto-backup-ready',
+          filename: 'pkey-auto-20261008-162400.pkey',
+        },
+      })
+    ).toEqual({
+      title: 'Backup ready',
+      body: 'pkey-auto-20261008-162400.pkey',
+      data: {
+        type: 'auto-backup-ready',
+        filename: 'pkey-auto-20261008-162400.pkey',
+      },
+      channelId: 'pkey-backups',
+      categoryIdentifier: OS_AUTO_BACKUP_CATEGORY,
+    });
+  });
+
+  it('does not add a share category for failed auto-backup alerts', () => {
+    expect(
+      buildOsNotificationContent({
+        title: 'Backup failed',
+        body: 'No space',
+        channel: 'pkey-backups',
+        data: { type: 'auto-backup-failed' },
+      })
+    ).toEqual({
+      title: 'Backup failed',
+      body: 'No space',
+      data: { type: 'auto-backup-failed' },
+      channelId: 'pkey-backups',
     });
   });
 });

@@ -12,15 +12,17 @@
  * - keyboardHeight is only used to drop the home-indicator inset while the
  *   keyboard is open (never added as full keyboard padding — avoids double offset).
  */
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import {
   View,
   Pressable,
+  ScrollView,
   Keyboard,
   KeyboardAvoidingView,
   Platform,
   StyleSheet,
   BackHandler,
+  useWindowDimensions,
   type StyleProp,
   type ViewStyle,
 } from 'react-native';
@@ -33,6 +35,7 @@ import Animated, {
 } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useReducedMotion } from '../../hooks/useReducedMotion';
+import { useSettings } from '../../context/SettingsContext';
 
 type Props = {
   visible: boolean;
@@ -60,7 +63,9 @@ export const KeyboardAwareBottomSheetModal = ({
   bottomGap = 5,
 }: Props) => {
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
+  const { t } = useSettings();
   const [keyboardOpen, setKeyboardOpen] = useState(false);
   const [mounted, setMounted] = useState(visible);
 
@@ -71,40 +76,34 @@ export const KeyboardAwareBottomSheetModal = ({
     setMounted(false);
   }, []);
 
-  useEffect(() => {
+  const prevSheet = useRef({ visible, reduceMotion });
+  // Enter and exit start before paint. The keyboard listener below stays an effect.
+  if (prevSheet.current.visible !== visible || prevSheet.current.reduceMotion !== reduceMotion) {
+    prevSheet.current = { visible, reduceMotion };
     if (visible) {
-      setMounted(true);
-    }
-  }, [visible]);
-
-  useEffect(() => {
-    if (!mounted) return;
-
-    if (visible) {
+      if (!mounted) setMounted(true);
       if (reduceMotion) {
         backdropOpacity.value = BACKDROP_OPACITY;
         sheetTranslateY.value = 0;
-        return;
+      } else {
+        backdropOpacity.value = 0;
+        sheetTranslateY.value = 48;
+        backdropOpacity.value = withTiming(BACKDROP_OPACITY, { duration: ENTER_MS });
+        sheetTranslateY.value = withSpring(0, SHEET_SPRING);
       }
-      backdropOpacity.value = 0;
-      sheetTranslateY.value = 48;
-      backdropOpacity.value = withTiming(BACKDROP_OPACITY, { duration: ENTER_MS });
-      sheetTranslateY.value = withSpring(0, SHEET_SPRING);
-      return;
+    } else if (mounted) {
+      if (reduceMotion) {
+        backdropOpacity.value = 0;
+        sheetTranslateY.value = 48;
+        setMounted(false);
+      } else {
+        backdropOpacity.value = withTiming(0, { duration: EXIT_MS });
+        sheetTranslateY.value = withTiming(48, { duration: EXIT_MS }, (finished) => {
+          if (finished) runOnJS(finishExit)();
+        });
+      }
     }
-
-    if (reduceMotion) {
-      backdropOpacity.value = 0;
-      sheetTranslateY.value = 48;
-      finishExit();
-      return;
-    }
-
-    backdropOpacity.value = withTiming(0, { duration: EXIT_MS });
-    sheetTranslateY.value = withTiming(48, { duration: EXIT_MS }, (finished) => {
-      if (finished) runOnJS(finishExit)();
-    });
-  }, [visible, mounted, reduceMotion, backdropOpacity, sheetTranslateY, finishExit]);
+  }
 
   useEffect(() => {
     if (!mounted) {
@@ -148,6 +147,7 @@ export const KeyboardAwareBottomSheetModal = ({
   // Keyboard open: only the 5px gap (home indicator is covered by the keyboard).
   // Keyboard closed: safe-area + gap so the sheet clears the home indicator.
   const sheetMarginBottom = keyboardOpen ? bottomGap : insets.bottom + bottomGap;
+  const sheetMaxHeight = Math.max(160, windowHeight - insets.top - sheetMarginBottom - 12);
 
   return (
     <View style={styles.overlay} accessibilityViewIsModal importantForAccessibility="yes">
@@ -156,7 +156,7 @@ export const KeyboardAwareBottomSheetModal = ({
         style={StyleSheet.absoluteFill}
         onPress={handleBackdropPress}
         accessibilityRole="button"
-        accessibilityLabel="Dismiss"
+        accessibilityLabel={t.close_button}
       />
       <KeyboardAvoidingView
         style={styles.dock}
@@ -169,10 +169,18 @@ export const KeyboardAwareBottomSheetModal = ({
             styles.sheet,
             sheetStyle,
             sheetAnimStyle,
-            { marginBottom: sheetMarginBottom, marginHorizontal: 12 },
+            { marginBottom: sheetMarginBottom, marginHorizontal: 12, maxHeight: sheetMaxHeight },
           ]}
         >
-          {children}
+          {/* flexGrow 0 overrides ScrollView's default flexGrow 1 so a short sheet stays short. */}
+          <ScrollView
+            style={styles.sheetScroll}
+            contentContainerStyle={styles.sheetContent}
+            keyboardShouldPersistTaps="handled"
+            bounces={false}
+          >
+            {children}
+          </ScrollView>
         </Animated.View>
       </KeyboardAvoidingView>
     </View>
@@ -213,5 +221,11 @@ const styles = StyleSheet.create({
     paddingTop: 20,
     paddingBottom: 16,
     borderWidth: 1,
+  },
+  sheetScroll: {
+    flexGrow: 0,
+  },
+  sheetContent: {
+    flexGrow: 0,
   },
 });

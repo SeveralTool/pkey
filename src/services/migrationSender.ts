@@ -22,8 +22,14 @@ import {
 import { parseJsonUnknown, tryParseJson } from '../utils/jsonUnknown';
 import { getSecureRandomHex } from '../utils/secureRandom';
 import { MigrationSendError } from './migrationErrors';
-import { migrationHttpGet, migrationHttpPost } from './migrationHttpClient';
+import { migrationHttpGet } from './migrationHttpClient';
 import { MigrationTcpSession } from './migrationTcpSession';
+import {
+  ensureTlsCredentials,
+  fingerprintTlsCertificatePem,
+  normalizeTlsFingerprint,
+  tlsFingerprintsMatch,
+} from './tlsCredentials';
 import {
   computeMigrationProof,
   computeSenderWipeProof,
@@ -57,7 +63,24 @@ export interface MigrationSendResult {
   fingerprint: string;
 }
 
-/** Fetches receiver `/info` without establishing a persistent migration session. */
+/**
+ * Aborts unless `observed` is the certificate fingerprint the peer declared.
+ * A null observation is a failed pin, not a cue to continue.
+ */
+export function assertMigrationTlsPin(observed: string | null, declared: string | undefined): void {
+  if (!tlsFingerprintsMatch(observed, declared)) {
+    throw new MigrationSendError(
+      'RECEIVER_UNREACHABLE',
+      `TLS pinning failed: declared=${normalizeTlsFingerprint(declared) ?? 'missing'} observed=${normalizeTlsFingerprint(observed) ?? 'missing'}`
+    );
+  }
+}
+
+/**
+ * Fetches receiver `/info` without establishing a persistent migration session.
+ * This probe does not pin the certificate and must not carry vault bytes.
+ * The transfer and the wipe pin {@link MigrationTcpSession.peerFingerprint}.
+ */
 export const fetchMigrationInfo = async (
   ip: string,
   port: number
@@ -137,33 +160,20 @@ export const sendMigration = async (
       );
     }
 
-    // Real pinning (audit finding A1): the receiver reports its cert
-    // fingerprint over the app protocol; the sender must cross-check that
-    // against the certificate the TLS peer actually presented. If they
-    // differ, we're either being MITM'd or the receiver mis-reported —
-    // either way, abort loudly rather than trusting the self-reported value.
+    // Pin the certificate the socket presented. A missing observation (iOS
+    // `getPeerCertificate` without DER) is the same failure as a mismatch:
+    // the declared `/info` value is not evidence.
     const observedTlsFingerprint = session.peerFingerprint;
-    const declaredTlsFingerprint = info.tlsFingerprint?.toUpperCase() || '';
+    const declaredTlsFingerprint = info.tlsFingerprint;
+    onTlsFingerprint?.(observedTlsFingerprint ?? '');
+    assertMigrationTlsPin(observedTlsFingerprint, declaredTlsFingerprint);
 
-    // Prefer the observed fingerprint for the UI when available — that's the
-    // one that actually proves nobody sat in the middle. Fall back to the
-    // declared one so older builds without `getPeerCertificate` still show
-    // *something* to the user for out-of-band verification.
-    onTlsFingerprint?.(observedTlsFingerprint || declaredTlsFingerprint || '');
-
-    if (observedTlsFingerprint && declaredTlsFingerprint) {
-      if (observedTlsFingerprint !== declaredTlsFingerprint) {
-        throw new MigrationSendError(
-          'RECEIVER_UNREACHABLE',
-          `TLS pinning failed: declared=${declaredTlsFingerprint} observed=${observedTlsFingerprint}`
-        );
-      }
-    } else if (!observedTlsFingerprint) {
-      // The native TLS layer did not expose peer cert introspection. Log a
-      // warning so the user knows the anti-MITM check degraded to visual
-      // verification only.
-      console.warn(
-        '[migration] TLS peer certificate unavailable — falling back to visual fingerprint check'
+    const { cert: localCert } = await ensureTlsCredentials();
+    const senderTlsFingerprint = fingerprintTlsCertificatePem(localCert);
+    if (!normalizeTlsFingerprint(senderTlsFingerprint)) {
+      throw new MigrationSendError(
+        'RECEIVER_UNREACHABLE',
+        'TLS pinning failed: local certificate unavailable'
       );
     }
 
@@ -226,6 +236,7 @@ export const sendMigration = async (
         senderSessionId,
         senderIp,
         senderCallbackPort,
+        senderTlsFingerprint,
       },
       channelKeyHex,
       { 'X-Source-Id': sourceId }
@@ -329,6 +340,8 @@ export const sendMigration = async (
 /**
  * Asks the sender callback server to wipe local data after a successful migration.
  * Tries primary IP then optional alternates (reported LAN IP vs TCP peer).
+ * Connects only when the observed callback certificate matches `senderTlsFingerprint`.
+ * A 16-character pairing secret is rejected here; there is no grace window.
  *
  * @returns `true` when the sender acknowledges a successful wipe
  */
@@ -339,9 +352,14 @@ export const requestSenderWipe = async (
   pairingSecret: string,
   receiverSessionId: string,
   wipeProof: string,
-  alternateIps: string[] = []
+  senderTlsFingerprint: string,
+  alternateIps: readonly string[] = []
 ): Promise<boolean> => {
-  const channelKeyHex = deriveChannelKeyHex(pairingSecret, receiverSessionId);
+  const normalizedSecret = normalizePairingCode(pairingSecret);
+  const expectedFingerprint = normalizeTlsFingerprint(senderTlsFingerprint);
+  if (!normalizedSecret || !expectedFingerprint) return false;
+
+  const channelKeyHex = deriveChannelKeyHex(normalizedSecret, receiverSessionId);
   const inner = { migrationId, wipeProof };
   const frame = encryptFrame(channelKeyHex, JSON.stringify(inner));
   const hosts = [senderIp, ...alternateIps]
@@ -349,8 +367,11 @@ export const requestSenderWipe = async (
     .filter((h, i, arr) => !!h && h !== '127.0.0.1' && arr.indexOf(h) === i);
 
   for (const host of hosts) {
+    const session = new MigrationTcpSession();
     try {
-      const res = await migrationHttpPost(host, senderCallbackPort, '/pkey/migrate/wipe', frame, {
+      await session.connect(host, senderCallbackPort);
+      if (!tlsFingerprintsMatch(session.peerFingerprint, expectedFingerprint)) continue;
+      const res = await session.post('/pkey/migrate/wipe', frame, {
         'Content-Type': MIGRATION_V2_CONTENT_TYPE,
       });
       if (res.status !== 200) continue;
@@ -359,6 +380,8 @@ export const requestSenderWipe = async (
       if (data?.ok) return true;
     } catch {
       /* try next host */
+    } finally {
+      session.close();
     }
   }
   return false;

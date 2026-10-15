@@ -3,10 +3,19 @@
  */
 import type { EncryptedDatabase } from '../types';
 import { getNewInstallUiDefaults } from './devicePreferences';
+import { getCachedPublicUiPrefs, type PublicUiPrefs } from './publicUiPrefs';
 
-/** Display-safe empty database (no cards, no verifier). */
-export function createEmptySessionDatabase(): EncryptedDatabase {
-  const ui = getNewInstallUiDefaults();
+/**
+ * Display-safe empty database (no cards, no verifier).
+ *
+ * Language, theme, and the screenshot opt-in default to the last public hints
+ * so login chrome keeps appearance and capture policy after lock. Pass `ui`
+ * to pin a snapshot (logout). Omit it to read the sync cache (boot / reset
+ * after `clearPublicUiPrefs`).
+ */
+export function createEmptySessionDatabase(ui?: PublicUiPrefs): EncryptedDatabase {
+  const prefs = ui ?? getCachedPublicUiPrefs();
+  const fallback = getNewInstallUiDefaults();
   return {
     version: '1.0.0',
     creation_date: new Date().toISOString(),
@@ -16,10 +25,10 @@ export function createEmptySessionDatabase(): EncryptedDatabase {
     settings: {
       autoLogout: '1M',
       webAutoLogout: '15M',
-      language: ui.language,
+      language: prefs.language ?? fallback.language,
       autoCollapse: true,
-      allowScreenshots: false,
-      theme: ui.theme,
+      allowScreenshots: prefs.allowScreenshots === true,
+      theme: prefs.theme ?? fallback.theme,
       genSymbols: true,
       genNumbers: true,
       genUppercase: true,

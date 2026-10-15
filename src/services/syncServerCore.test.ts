@@ -588,6 +588,36 @@ describe('SyncServerCore vault fork', () => {
     expect(db.cards.map((c) => c.id)).toEqual(['pwa-1']);
     expect(db.tombstones?.some((t) => t.id === 'phone-1')).toBe(true);
   });
+
+  it('consumes the replace authorization after one use', async () => {
+    const { encryptSyncPushWire, emptySyncIndex } =
+      require('@pkey/core') as typeof import('@pkey/core');
+    const db = makeDb();
+    db.cards = [phoneCard];
+    const setDb = jest.fn(async (next: EncryptedDatabase) => {
+      Object.assign(db, next);
+    });
+    const core = new SyncServerCore({ getDb: () => db, setDb });
+    const { session, sent, token } = await authSession(core, db, 'pwa-fork');
+    core.allowVaultReplace('pwa-fork');
+    const push = (upserts: (typeof pwaCard)[]) =>
+      session.onMessage({
+        type: 'sync_push',
+        protocolVersion: 2,
+        encryptedPayload: encryptSyncPushWire(
+          token,
+          { index: emptySyncIndex(), upserts, deletions: [], tombstones: [], replaceVault: true },
+          db.passwordHash
+        ),
+      });
+    await push([pwaCard]);
+    expect(db.cards.map((c) => c.id)).toEqual(['pwa-1']);
+    const errorsBefore = sent.filter((m) => m.type === 'error').length;
+
+    await push([{ ...pwaCard, id: 'pwa-2' }]);
+    expect(sent.filter((m) => m.type === 'error').length).toBe(errorsBefore + 1);
+    expect(db.cards.map((c) => c.id)).toEqual(['pwa-1']);
+  });
 });
 
 describe('SyncServerCore action confirm', () => {
@@ -825,6 +855,48 @@ describe('SyncServerCore idempotent persist', () => {
     sent.length = 0;
     return { session, sent, token: decoded!.token };
   }
+
+  it('rejects a v3 auth that omits the SPAKE2 share and counts it as a failure', async () => {
+    const db = makeDb();
+    const onEvent = jest.fn();
+    const core = new SyncServerCore({ getDb: () => db, setDb: jest.fn(), onEvent });
+    const sent: Record<string, unknown>[] = [];
+    const session = core.createWsSession((msg) => {
+      sent.push(msg as Record<string, unknown>);
+    }, clientIp);
+    await session.onMessage({ type: 'challenge_request', sourceId: 'pwa-downgrade' });
+    const challengeMsg = sent.find((m) => m.type === 'challenge') as { challenge: string };
+    await session.onMessage({
+      type: 'auth',
+      response: computeChallengeResponse(challengeMsg.challenge, db.passwordHash),
+      protocolVersion: 3,
+    });
+    expect(sent.find((m) => m.type === 'auth_ok')).toBeUndefined();
+    expect(sent.find((m) => m.type === 'auth_error')).toMatchObject({ code: 'AUTH_FAILED' });
+    expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ type: 'auth_failure' }));
+    expect(session.authenticated).toBe(false);
+  });
+
+  it('answers an AEAD push with an AEAD pull even when the outer version claims v2', async () => {
+    const { encryptSyncPushWire, emptySyncIndex, isAeadWireEnvelope } =
+      require('@pkey/core') as typeof import('@pkey/core');
+    const db = makeDb();
+    const core = new SyncServerCore({ getDb: () => db, setDb: jest.fn() });
+    const { session, sent, token } = await authSession(core, db, 'pwa-wire');
+    await session.onMessage({
+      type: 'sync_push',
+      protocolVersion: 2,
+      encryptedPayload: encryptSyncPushWire(
+        token,
+        { index: emptySyncIndex(), upserts: [], deletions: [], tombstones: [] },
+        db.passwordHash,
+        3
+      ),
+    });
+    const pull = sent.find((m) => m.type === 'sync_pull') as { encryptedPayload: unknown };
+    expect(pull).toBeDefined();
+    expect(isAeadWireEnvelope(pull.encryptedPayload)).toBe(true);
+  });
 
   it('does not persist two empty sync_push pulls', async () => {
     const { encryptSyncPushWire, emptySyncIndex } =

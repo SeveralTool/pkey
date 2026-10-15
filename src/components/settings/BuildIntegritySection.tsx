@@ -13,6 +13,7 @@ import { View, Text, TouchableOpacity, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { useSettings } from '../../context/SettingsContext';
 import { globalStyles as styles } from '../../styles/globalStyles';
+import type { ThemeColors } from '../../styles/colors';
 import { SettingsSectionCard } from '../common';
 import { OFFICIAL_REPO_RELEASES_URL } from '../../constants/legalContact';
 import { getBuildIntegrityInfo } from '../../services/buildIntegrity';
@@ -94,7 +95,7 @@ export const BuildIntegritySection: React.FC = () => {
 interface RowProps {
   label: string;
   value: string;
-  c: Record<string, string>;
+  c: ThemeColors;
   monospace?: boolean;
 }
 

@@ -35,7 +35,7 @@ interface Props {
   dangerColor: string;
 }
 
-export const SyncWebCard: React.FC<Props> = React.memo(({
+export const SyncWebCard: React.FC<Props> = React.memo(function SyncWebCard({
   primaryUrl,
   stableMdnsUrl,
   webClients,
@@ -49,7 +49,7 @@ export const SyncWebCard: React.FC<Props> = React.memo(({
   bgColor,
   borderColor,
   dangerColor,
-}) => {
+}: Props) {
   const { setCustomPrompt, setCustomPromptInput } = useCoreState();
   const [qrVisible, setQrVisible] = useState(true);
   const [copiedKey, setCopiedKey] = useState<string | null>(null);
@@ -80,7 +80,7 @@ export const SyncWebCard: React.FC<Props> = React.memo(({
         onConfirm: (value: string) => {
           onSetAlias(sourceId, value);
           setCustomPromptInput('');
-          setCustomPrompt((prev: { visible: boolean }) => ({ ...prev, visible: false }));
+          setCustomPrompt((prev) => ({ ...prev, visible: false }));
         },
       });
     },
@@ -92,7 +92,13 @@ export const SyncWebCard: React.FC<Props> = React.memo(({
       <View style={styles.headerRow}>
         <View style={[styles.dot, { backgroundColor: '#22c55e' }]} />
         <Text style={[styles.label, { color: textColor }]}>{t.web_server_active}</Text>
-        <TouchableOpacity onPress={() => setQrVisible((v) => !v)} style={styles.toggleBtn}>
+        <TouchableOpacity
+          onPress={() => setQrVisible((v) => !v)}
+          style={styles.toggleBtn}
+          accessibilityRole="button"
+          accessibilityLabel={t.web_access_toggle_qr}
+          accessibilityState={{ expanded: qrVisible }}
+        >
           <Ionicons name={qrVisible ? 'chevron-up' : 'chevron-down'} size={16} color={mutedColor} />
         </TouchableOpacity>
       </View>
@@ -111,6 +117,7 @@ export const SyncWebCard: React.FC<Props> = React.memo(({
             <TouchableOpacity
               onPress={() => copyUrl(primaryUrl, 'ip')}
               style={[styles.copyBtn, { borderColor }]}
+              accessibilityRole="button"
               accessibilityLabel={t.web_access_copy}
             >
               <Ionicons
@@ -133,6 +140,7 @@ export const SyncWebCard: React.FC<Props> = React.memo(({
             <TouchableOpacity
               onPress={() => copyUrl(stableMdnsUrl!, 'mdns')}
               style={[styles.copyBtn, { borderColor }]}
+              accessibilityRole="button"
               accessibilityLabel={t.web_access_copy}
             >
               <Ionicons
@@ -196,11 +204,19 @@ export const SyncWebCard: React.FC<Props> = React.memo(({
                   ]}
                 />
                 <View style={styles.clientMeta}>
-                  <Text style={[styles.clientTitle, { color: textColor }]} numberOfLines={1}>
+                  <Text
+                    style={[styles.clientTitle, { color: textColor }]}
+                    numberOfLines={1}
+                    accessibilityLabel={title}
+                  >
                     {title}
                   </Text>
                   {subtitle ? (
-                    <Text style={[styles.clientSub, { color: mutedColor }]} numberOfLines={1}>
+                    <Text
+                      style={[styles.clientSub, { color: mutedColor }]}
+                      numberOfLines={1}
+                      accessibilityLabel={subtitle}
+                    >
                       {subtitle}
                     </Text>
                   ) : null}
@@ -212,7 +228,8 @@ export const SyncWebCard: React.FC<Props> = React.memo(({
                   <TouchableOpacity
                     onPress={() => openAliasPrompt(c.sourceId!)}
                     style={[styles.iconBtn, { borderColor }]}
-                    accessibilityLabel={t.web_client_rename}
+                    accessibilityRole="button"
+                    accessibilityLabel={`${t.web_client_rename}. ${title}`}
                   >
                     <Ionicons name="pencil-outline" size={13} color={mutedColor} />
                   </TouchableOpacity>
@@ -220,7 +237,8 @@ export const SyncWebCard: React.FC<Props> = React.memo(({
                 <TouchableOpacity
                   onPress={() => onBlockClient(c.socketId)}
                   style={[styles.iconBtn, { borderColor: dangerColor }]}
-                  accessibilityLabel={t.web_client_block}
+                  accessibilityRole="button"
+                  accessibilityLabel={`${t.web_client_block}. ${title}`}
                 >
                   <Ionicons name="ban-outline" size={13} color={dangerColor} />
                 </TouchableOpacity>
@@ -232,6 +250,7 @@ export const SyncWebCard: React.FC<Props> = React.memo(({
     </View>
   );
 });
+
 const WebAccessQr = React.memo(function WebAccessQr({
   value,
   backgroundColor,

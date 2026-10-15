@@ -5,6 +5,8 @@ import React from 'react';
 import { View, Text, TouchableOpacity } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import type { CardIcon } from '../../types';
+import type { LocaleStrings } from '../../constants/localization';
+import type { ThemeColors } from '../../styles/colors';
 import { globalStyles as styles, spacing } from '../../styles/globalStyles';
 import { AutoDetectIcon } from '../common/AutoDetectIcon';
 
@@ -16,8 +18,8 @@ export interface LinkGroupCardProps {
   link?: string;
   expanded: boolean;
   isDark: boolean;
-  c: Record<string, string>;
-  t: Record<string, string>;
+  c: ThemeColors;
+  t: LocaleStrings;
   onToggle: () => void;
   children: React.ReactNode;
 }

@@ -1,5 +1,6 @@
 package expo.modules.pkeyautofill
 
+import android.app.Activity
 import android.content.Context
 import android.util.Log
 import androidx.security.crypto.EncryptedFile
@@ -8,6 +9,8 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 import java.nio.charset.Charset
+import java.util.Collections
+import java.util.WeakHashMap
 import java.util.concurrent.ConcurrentHashMap
 
 data class CacheEntry(
@@ -25,7 +28,9 @@ data class CacheEntry(
  * Passwords live only in this process's memory. Disk holds username / domains /
  * packages so the service can still present a dataset after a JS reload; the
  * secret is filled after [AutofillAuthActivity] biometric confirmation.
- * [wipeSession] is called from onDestroy / BOOT_COMPLETED.
+ * [wipeSession] runs on lock, logout, and BOOT_COMPLETED. It does not run from
+ * [android.service.autofill.AutofillService.onDisconnected]: the framework
+ * unbinds after the fill request and before the user confirms the dataset.
  */
 object AutofillCache {
   private const val TAG = "PKeyAutofillCache"
@@ -33,13 +38,45 @@ object AutofillCache {
   private const val LEGACY_FILE_NAME = "pkey_autofill_cache.json"
   private const val KEY_ALIAS = "pkey_autofill_master_v1"
 
+  /**
+   * Multi-label public suffixes treated as the eTLD, not as a registrable
+   * domain. Not a public-suffix list: just the suffixes whose last two labels
+   * would otherwise collapse unrelated hosts.
+   */
+  private val MULTI_LABEL_PUBLIC_SUFFIXES = setOf(
+    "github.io",
+    "gitlab.io",
+    "co.uk",
+    "org.uk",
+    "ac.uk",
+    "com.au",
+    "com.br",
+    "com.ar",
+    "co.jp",
+  )
+
   private val sessionPasswords = ConcurrentHashMap<String, String>()
+  private val sessionLock = Any()
+  private var sessionGeneration = 0
+
+  @Volatile
+  private var rememberedApp: Context? = null
+
+  private val authActivities: MutableSet<Activity> =
+    Collections.newSetFromMap(WeakHashMap())
+
+  private fun remember(context: Context) {
+    if (rememberedApp == null) rememberedApp = context.applicationContext
+  }
 
   fun write(context: Context, json: String) {
+    remember(context)
     val entries = parseEntries(json)
-    sessionPasswords.clear()
-    for (e in entries) {
-      if (e.password.isNotEmpty()) sessionPasswords[e.id] = e.password
+    synchronized(sessionLock) {
+      sessionPasswords.clear()
+      for (e in entries) {
+        if (e.password.isNotEmpty()) sessionPasswords[e.id] = e.password
+      }
     }
     persistMetadata(context, entries)
     File(context.filesDir, LEGACY_FILE_NAME).delete()
@@ -50,16 +87,58 @@ object AutofillCache {
   }
 
   fun wipeSession(context: Context) {
-    sessionPasswords.clear()
+    remember(context)
+    synchronized(sessionLock) {
+      sessionGeneration++
+      sessionPasswords.clear()
+    }
     File(context.filesDir, ENC_FILE_NAME).delete()
     File(context.filesDir, LEGACY_FILE_NAME).delete()
+    cancelAuthActivities()
   }
 
-  fun passwordFor(id: String): String = sessionPasswords[id] ?: ""
+  /**
+   * Lock/logout path when the React context is already gone. Uses the
+   * application context captured by the last [write] or [read].
+   */
+  fun wipeRememberedSession() {
+    val ctx = rememberedApp
+    if (ctx != null) {
+      wipeSession(ctx)
+      return
+    }
+    synchronized(sessionLock) {
+      sessionGeneration++
+      sessionPasswords.clear()
+    }
+    cancelAuthActivities()
+  }
+
+  fun trackAuthActivity(activity: Activity) {
+    synchronized(authActivities) { authActivities.add(activity) }
+  }
+
+  fun untrackAuthActivity(activity: Activity) {
+    synchronized(authActivities) { authActivities.remove(activity) }
+  }
+
+  fun currentGeneration(): Int = synchronized(sessionLock) { sessionGeneration }
+
+  fun passwordFor(id: String): String = synchronized(sessionLock) {
+    sessionPasswords[id] ?: ""
+  }
+
+  /** Password for [id] only when [generation] is still the current session. */
+  fun passwordForSession(id: String, generation: Int): String = synchronized(sessionLock) {
+    if (generation != sessionGeneration) "" else sessionPasswords[id] ?: ""
+  }
 
   fun read(context: Context): List<CacheEntry> {
+    remember(context)
     val meta = readMetadata(context)
-    return meta.map { it.copy(password = sessionPasswords[it.id] ?: "") }
+    return synchronized(sessionLock) {
+      meta.map { it.copy(password = sessionPasswords[it.id] ?: "") }
+    }
   }
 
   private fun persistMetadata(context: Context, entries: List<CacheEntry>) {
@@ -85,6 +164,7 @@ object AutofillCache {
   private fun readMetadata(context: Context): List<CacheEntry> {
     val encPath = File(context.filesDir, ENC_FILE_NAME)
     if (encPath.exists()) {
+      File(context.filesDir, LEGACY_FILE_NAME).delete()
       return try {
         val encFile = openEncryptedFile(context)
         val json = encFile.openFileInput().use { input ->
@@ -105,10 +185,9 @@ object AutofillCache {
         legacy.delete()
         return emptyList()
       }
-      val entries = parseEntries(plaintext)
-      for (e in entries) {
-        if (e.password.isNotEmpty()) sessionPasswords[e.id] = e.password
-      }
+      // Metadata only. Passwords stay out of the session until an unlocked
+      // vault calls [write]. A fill must not offer secrets the user never unlocked.
+      val entries = parseEntries(plaintext).map { it.copy(password = "") }
       try {
         persistMetadata(context, entries)
       } catch (e: Exception) {
@@ -165,30 +244,52 @@ object AutofillCache {
     }
   }
 
-  fun match(entries: List<CacheEntry>, host: String?, packageName: String?): List<CacheEntry> {
-    val h = host?.trim()?.lowercase()?.removePrefix("www.") ?: ""
-    val pkg = packageName?.trim()?.lowercase() ?: ""
-    if (h.isEmpty() && pkg.isEmpty()) return emptyList()
+  private fun normalizeHost(raw: String): String =
+    raw.trim().lowercase().removePrefix("www.")
 
-    fun registrable(domain: String): String {
-      val parts = domain.split('.').filter { it.isNotEmpty() }
-      return if (parts.size <= 2) domain else parts.takeLast(2).joinToString(".")
-    }
+  /** eTLD+1. Multi-label suffixes in [MULTI_LABEL_PUBLIC_SUFFIXES] count as the eTLD. */
+  private fun registrable(domain: String): String {
+    val parts = normalizeHost(domain).split('.').filter { it.isNotEmpty() }
+    if (parts.isEmpty()) return ""
+    if (parts.size == 1) return parts[0]
+    val lastTwo = parts.takeLast(2).joinToString(".")
+    val suffixLabels = if (lastTwo in MULTI_LABEL_PUBLIC_SUFFIXES) 2 else 1
+    val keep = suffixLabels + 1
+    return if (parts.size <= keep) parts.joinToString(".")
+    else parts.takeLast(keep).joinToString(".")
+  }
+
+  /**
+   * Exact package (100), exact host (90), or same registrable domain (70).
+   * Title text and raw suffix checks are not matches.
+   */
+  fun match(entries: List<CacheEntry>, host: String?, packageName: String?): List<CacheEntry> {
+    val h = host?.let(::normalizeHost)?.takeIf { it.isNotEmpty() } ?: ""
+    val pkg = packageName?.trim()?.lowercase()?.takeIf { it.isNotEmpty() } ?: ""
+    if (h.isEmpty() && pkg.isEmpty()) return emptyList()
+    val want = if (h.isEmpty()) "" else registrable(h)
 
     val scored = entries.mapNotNull { e ->
-      var score = 0
-      if (pkg.isNotEmpty() && e.packages.any { it == pkg }) score = 100
-      else if (h.isNotEmpty()) {
-        when {
-          e.domains.any { it == h } -> score = 90
-          e.domains.any { registrable(it) == registrable(h) } -> score = 70
-          e.domains.any { h.endsWith(".$it") || it.endsWith(".$h") } -> score = 55
-          e.title.lowercase().contains(h.substringBefore('.')) -> score = 25
-        }
+      val score = when {
+        pkg.isNotEmpty() && e.packages.any { it == pkg } -> 100
+        h.isNotEmpty() && e.domains.any { normalizeHost(it) == h } -> 90
+        want.isNotEmpty() && e.domains.any { registrable(it) == want } -> 70
+        else -> 0
       }
       if (score > 0) score to e else null
     }
     return scored.sortedByDescending { it.first }.map { it.second }.take(8)
+  }
+
+  private fun cancelAuthActivities() {
+    val snapshot = synchronized(authActivities) { authActivities.toList() }
+    for (activity in snapshot) {
+      activity.runOnUiThread {
+        if (activity.isFinishing) return@runOnUiThread
+        activity.setResult(Activity.RESULT_CANCELED)
+        activity.finish()
+      }
+    }
   }
 
   fun isPersistedFileEncrypted(context: Context): Boolean {

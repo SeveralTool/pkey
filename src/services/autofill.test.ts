@@ -27,6 +27,14 @@ describe('buildAutofillCacheJson', () => {
     expect(entries[0]?.domains).toContain('instagram.com');
   });
 
+  it('keeps the real host and does not store its public suffix', () => {
+    const json = buildAutofillCacheJson([
+      card({ link: 'https://foo.github.io/project' }),
+    ]);
+    const entries = JSON.parse(json) as { domains: string[] }[];
+    expect(entries[0]?.domains).toEqual(['foo.github.io']);
+  });
+
   it('uses uris when link is canonical https', () => {
     const json = buildAutofillCacheJson([
       card({

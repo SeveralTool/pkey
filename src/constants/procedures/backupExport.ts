@@ -9,7 +9,7 @@ export const backupExportProcedure: ProcedureDoc = {
   body: {
     ESP: `QUÉ HACÉ ESTA SECCIÓN
 
-Desde aquí podés guardar un respaldo cifrado de tu bóveda en el teléfono, o compartir las llaves en CSV/JSON sin cifrar. Los .pkey quedan en la carpeta Exports de PKEY: no forman parte de la bóveda abierta y podés borrarlos cuando ya no los necesites. CSV y JSON no se guardan en el teléfono.
+Desde aquí podés guardar un respaldo cifrado de tu bóveda en el teléfono, o compartir las llaves en CSV/JSON sin cifrar. Los .pkey quedan en Seguridad, en la sección de respaldos: no forman parte de la bóveda abierta y podés borrarlos cuando ya no los necesites. CSV y JSON no se guardan en el teléfono.
 
 QUÉ INCLUYE CADA FORMATO
 
@@ -36,8 +36,16 @@ El botón de archivo local crea un respaldo cifrado (.pkey). Es la copia más se
 
 1. Tocá «Crear archivo local (.pkey)».
 2. La app pedirá biometría o contraseña maestra.
-3. Guarda el archivo en Exports y abre el menú para compartirlo (Drive, Files, etc.).
+3. Guarda el archivo en la sección de respaldos y abre el menú para compartirlo (Drive, Archivos, etc.).
 4. Guardalo en un lugar de confianza. Para volver a cargarlo, usá Importar / restaurar.
+
+BACKUP AUTOMÁTICO (OPT-IN)
+
+El interruptor nace apagado. Si lo activás, PKEY copia el mismo .pkey cifrado a la sección de respaldos, en Seguridad (no se elige otra carpeta) en el intervalo que elijas: 1 minuto, 24 horas o 7 días (el valor inicial es 24 horas), aunque no hayas cambiado la bóveda. En Android, 1 minuto sigue copiando después de salir de PKEY mientras el teléfono está encendido: aparece un aviso silencioso para que el sistema no congele la app. Si cerrás PKEY desde recientes, o en iPhone, el sistema no copia más seguido que cada 15 minutos (en iPhone, cuando iOS lo decide) y 1 minuto se completa al volver a abrir la app. Con el teléfono apagado no hay copia. Guarda como máximo 3 automáticos, aparte de los 10 manuales.
+
+• Un aviso opcional te permite compartir el archivo (Drive, Archivos, etc.). Si ignorás el aviso o denegás notificaciones, el .pkey igual queda en la sección de respaldos.
+• El automático no sustituye guardar una copia fuera del teléfono: el gesto de compartir sigue siendo cómo sale del dispositivo.
+• Si el secreto de dispositivo está activo, esa copia también pide el kit de recuperación en otro teléfono.
 
 SECRETO DE DISPOSITIVO (OPCIONAL)
 
@@ -60,7 +68,7 @@ Debajo de los botones verás los respaldos .pkey guardados en este dispositivo, 
 • El tamaño del export está limitado por el espacio libre del sistema (PKEY no impone una cuota propia).
 • PKEY guarda como máximo 10 respaldos .pkey. Si llegás a 10, deberás borrar el más antiguo o algún otro para poder crear uno nuevo.
 • Si aparece el aviso de «máximo alcanzado», elegí «borrar el más antiguo y continuar» y la app creará el nuevo export automáticamente.
-• Si no hay espacio suficiente, la app te lo avisará: liberá almacenamiento o borrá exports viejos e intentá de nuevo.
+• Si no hay espacio suficiente, la app te lo avisará: liberá almacenamiento o borrá respaldos viejos e intentá de nuevo.
 
 RESTAURAR UN .PKEY
 
@@ -70,10 +78,10 @@ EN RESUMEN
 
 • Copia completa de PKEY (llaves + ajustes) → .pkey.
 • Intercambio puntual con otra app → CSV (columnas básicas) o JSON (llave completa); solo se comparte.
-• Sin espacio o exports viejos → mirá el espacio libre y la lista debajo.`,
+• Sin espacio o respaldos viejos → mirá el espacio libre y la lista debajo.`,
     ING: `WHAT THIS SECTION DOES
 
-Here you can save an encrypted backup of your vault on the phone, or share keys as unencrypted CSV/JSON. .pkey files stay in PKEY’s Exports folder: they are not part of the open vault, and you can delete them when you no longer need them. CSV and JSON are not kept on the phone.
+Here you can save an encrypted backup of your vault on the phone, or share keys as unencrypted CSV/JSON. .pkey files stay in Security, under Backup & export: they are not part of the open vault, and you can delete them when you no longer need them. CSV and JSON are not kept on the phone.
 
 WHAT EACH FORMAT INCLUDES
 
@@ -100,8 +108,16 @@ The local file button creates an encrypted backup (.pkey). This is the safest co
 
 1. Tap “Create local file (.pkey)”.
 2. The app will ask for biometrics or your master password.
-3. It saves the file under Exports and opens the share sheet (Drive, Files, etc.).
+3. It saves the file in the Backup section and opens the share sheet (Drive, Files, etc.).
 4. Store it somewhere you trust. To load it again, use Import / restore.
+
+AUTOMATIC BACKUP (OPT-IN)
+
+The switch starts off. If you turn it on, PKEY copies the same encrypted .pkey into the Backup section, in Security (you do not pick another folder) on the interval you choose: 1 minute, 24 hours, or 7 days (the default is 24 hours), even if you did not change the vault. On Android, 1 minute keeps copying after you leave PKEY while the phone is on: a silent notice appears so the system does not freeze the app. If you swipe PKEY away, or on iPhone, the system will not copy more often than every 15 minutes (on iPhone, when iOS decides) and 1 minute catches up when you open the app again. A powered-off phone does not run a copy. It keeps at most 3 automatic files, separate from the 10 manual ones.
+
+• An optional alert lets you share the file (Drive, Files, and so on). If you ignore the alert or deny notifications, the .pkey still stays in the Backup section.
+• Automatic backup does not replace keeping a copy off the phone: sharing is still how the file leaves the device.
+• If device secret is on, that copy also needs the recovery kit on another phone.
 
 DEVICE SECRET (OPTIONAL)
 

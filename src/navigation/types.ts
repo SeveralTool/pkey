@@ -1,5 +1,5 @@
 /**
- * @fileoverview Dashboard tab route names shared by UIContext and the native tab navigator.
+ * @fileoverview Dashboard tab route names shared by the tab context and the native tab navigator.
  */
 
 export const DASHBOARD_TAB_NAMES = ['cards', 'stats', 'security', 'settings'] as const;
@@ -13,7 +13,7 @@ export type DashboardTabParamList = {
   settings: undefined;
 };
 
-/** Type guard for native tab route names and UIContext `currentTab`. */
+/** Type guard for native tab route names and `useDashboardTabName`. */
 export function isDashboardTabName(value: unknown): value is DashboardTabName {
   return typeof value === 'string' && (DASHBOARD_TAB_NAMES as readonly string[]).includes(value);
 }

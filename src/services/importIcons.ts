@@ -10,7 +10,7 @@ export type ImportIconProgress = (current: number, total: number) => void;
 const ICON_IMPORT_CONCURRENCY = 6;
 
 async function mapWithConcurrency<T>(
-  items: T[],
+  items: readonly T[],
   concurrency: number,
   worker: (item: T, index: number) => Promise<void>
 ): Promise<void> {
@@ -36,7 +36,7 @@ async function mapWithConcurrency<T>(
  *        thread `db.settings.enableFaviconLookup` through. Audit finding M5.
  */
 export async function enrichImportedCardsWithIcons(
-  cards: PasswordCard[],
+  cards: readonly PasswordCard[],
   onProgress?: ImportIconProgress,
   options: { allowRemoteFavicon?: boolean } = {}
 ): Promise<PasswordCard[]> {

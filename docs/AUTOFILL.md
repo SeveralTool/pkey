@@ -14,7 +14,7 @@ The user must confirm in system Settings.
 
 ## Matching
 
-Candidates are ranked from vault `link` **and** optional `uris` (Google `android://…@package`, Bitwarden `androidapp://package`, https hosts). Android AutofillService matches the requesting **package name** and/or web domain. iOS Credential Provider (not shipped) should index the same **https hosts**.
+Candidates come from vault `link` and optional `uris` (Google `android://…@package`, Bitwarden `androidapp://package`, https hosts). The Android cache stores those hosts as written. A fill matches an exact package name, an exact host (`www.` stripped), or the same registrable domain. Registrable domains use a small built-in list of multi-label public suffixes (`github.io`, `co.uk`, and a few others) so sibling sites on those suffixes do not share a login. Title text is not a match. iOS Credential Provider (not shipped) should index the same https hosts.
 
 ## Android flow
 

@@ -17,7 +17,8 @@ When you enable the switch, PKEY shows a code to write down or print. That code 
 ## HOW TO USE IT
 
 - On this phone: the master password or biometrics still unlock. The secret stays in this device’s hardware.
-- On another phone, when restoring a `.pkey` or after migration: you need the master password and the kit. Without the kit the file will not open; it can look like the password is wrong.
+- On another phone, when restoring a `.pkey` or after migration: you need the master password and the kit. After the password, PKEY asks for the kit; once the vault opens, it stores the secret in that phone's hardware and does not ask again.
+- Changing the enrolled fingerprint or face on this phone does not disable the secret. If an older PKEY version lost it that way, unlock asks for the kit once.
 - Unencrypted CSV and JSON do not use the kit either.
 
 ## IF YOU LOSE IT

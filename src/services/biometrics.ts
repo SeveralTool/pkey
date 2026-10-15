@@ -2,29 +2,47 @@ import * as LocalAuthentication from 'expo-local-authentication';
 import * as SecureStore from 'expo-secure-store';
 import vaultKeys, { isPkeyVaultKeysAvailable } from 'pkey-vault-keys';
 import { withExternalUiSession } from '../utils/autoLogoutGuard';
+import { isUserCanceledAuth } from './deviceSecret';
 
 /**
- * @fileoverview Biometric unlock credentials in SecureStore.
+ * @fileoverview Biometric unlock credentials: hardware bundle first, SecureStore fallback.
  *
  * Storage model (post-audit C2 + A3):
+ *
+ *  - `pkey-vault-keys` when the binary has it and `detectCompromisedDevice()`
+ *    is false: the bundle is AES-GCM wrapped by an Android Keystore key
+ *    (BIOMETRIC_STRONG, invalidated on enrollment change) or an iOS Keychain
+ *    item (`biometryCurrentSet`). **Android prompts on write too**
+ *    (`UnlockKeystore.store` runs the cipher inside a `BiometricPrompt`
+ *    `CryptoObject`); iOS `SecItemAdd` does not prompt. The missing prompt does
+ *    not skip the ACL flag. Reads always prompt inside Keystore / Keychain.
+ *    `isHardwareBacked()` on iOS is the label `"keychain"`, not a Secure
+ *    Enclave measurement.
+ *
+ *  - A compromised device gets **no new bundle**. The write does not fall
+ *    through to SecureStore. An existing hardware blob is left in place by
+ *    {@link persistUnlockCredentials}; {@link replaceUnlockCredentials} still
+ *    clears it, because the new root must not be stored without user-auth.
  *
  *  - `pkey_unlock_meta_v1`   → non-sensitive marker `{ hasBundle: true }`,
  *                              device-bound but readable without biometric.
  *                              Used by the login screen to decide whether the
  *                              biometric button should even be shown.
  *
- *  - `pkey_unlock_bundle_v2` → sensitive `UnlockCredentials` JSON, device-bound.
- *                              Written without OS auth (the user already proved
- *                              the master password). Reads go through
- *                              {@link authenticateBiometric} first so every
- *                              biometric unlock shows Face ID / fingerprint.
+ *  - `pkey_unlock_bundle_v2` → fallback only when the native module is missing
+ *                              (Expo Go) or `storeUnlockBundle` fails for a
+ *                              reason other than user cancel. Sensitive
+ *                              `UnlockCredentials` JSON, `requireAuthentication:
+ *                              false`. Any same-UID caller of `getItemAsync`
+ *                              decrypts it without a `CryptoObject`. The
+ *                              {@link authenticateBiometric} prompt on read is
+ *                              not that gate, and an enrollment change does not
+ *                              invalidate the item. Logout does not delete it;
+ *                              reset and migration do ({@link destroyMasterKey}).
  *
  * The **master password is never persisted** — only the derived `rootKeyHex`,
- * KDF salt and auth hash live in the sensitive item. This keeps the invariant
- * "your plaintext master password never touches disk" intact even on a
- * compromised (rooted, ADB-connected) device: an attacker who dumps the
- * SecureStore blob still cannot recover the master password itself, only the
- * derived root key (which is what the vault actually uses for encryption).
+ * KDF salt and auth hash live in the sensitive item. A dump of the SecureStore
+ * fallback still cannot recover the master password, only the derived root.
  *
  * A one-shot migration from the legacy v1 bundle (which used
  * `requireAuthentication: false` and could hold a `masterPassword` field)
@@ -198,6 +216,9 @@ export const peekUnlockBundle = async (): Promise<{ hasBundle: true } | null> =>
  * If the item does not exist yet but a legacy v1 bundle is present, the
  * legacy credentials are migrated to v2 (stripping any `masterPassword`
  * field) after the same biometric prompt.
+ *
+ * A canceled hardware prompt returns `null`. It does not continue into the
+ * SecureStore fallback dialog: cancel means the user does not want to unlock.
  */
 export const loadUnlockCredentials = async (
   prompt = 'Unlock PKEY'
@@ -209,6 +230,10 @@ export const loadUnlockCredentials = async (
       const parsed = parseBundle(raw);
       if (parsed) return parsed;
     } catch (e) {
+      if (isUserCanceledAuth(e)) {
+        console.warn('[biometrics] hardware unlock cancelled by the user');
+        return null;
+      }
       console.warn('[biometrics] native unlock read failed', e);
     }
   }
@@ -254,62 +279,90 @@ export const storeMasterKey = async (_pass: string, _prompt: string): Promise<bo
 /**
  * Persists the derived unlock credentials after a successful password login.
  *
- * Write deliberately uses {@link DEVICE_BOUND} (no biometric prompt): the user
- * already proved the master password. Requiring OS auth on *write* forced a
- * second Face ID / fingerprint dialog after every password login, including
- * when the user intentionally chose the password path (dirty fingers, etc.).
+ * Prefers the hardware bundle (`pkey-vault-keys`). On Android that write shows
+ * one BIOMETRIC_STRONG prompt (the Keystore key only works inside an
+ * authenticated `CryptoObject`); on iOS `SecItemAdd` is silent and still sets
+ * `biometryCurrentSet`. If the user cancels that prompt nothing is written and
+ * `false` is returned — the vault stays unlocked, the next login simply asks
+ * for the password again. A compromised device also returns `false` and does
+ * not write SecureStore. Any other native failure, or a missing module, falls
+ * back to the SecureStore item ({@link DEVICE_BOUND}, no OS auth on write).
  *
- * Reads are gated by {@link authenticateBiometric} in {@link loadUnlockCredentials}
- * so the login auto-prompt and the fingerprint button always show the OS dialog.
+ * Reads are gated by the Keystore / Keychain prompt, or by
+ * {@link authenticateBiometric} on the SecureStore fallback. A canceled
+ * hardware read returns `null` and does not open that fallback.
  *
- * The optional legacy `password` / `_prompt` parameters are accepted only for
- * source compatibility; they are ignored and never written to disk.
+ * The optional legacy `password` parameter is accepted only for source
+ * compatibility; it is ignored and never written to disk.
+ *
+ * @returns `true` when a bundle (hardware or fallback) is on disk afterwards.
  */
 export const persistUnlockCredentials = async (
   rootKeyHex: string,
   kdfSalt: string,
   authHash: string,
   _legacyPasswordIgnored?: string,
-  _prompt = 'Unlock PKEY'
-): Promise<void> => {
+  prompt = 'Unlock PKEY'
+): Promise<boolean> => {
   const credentials: UnlockCredentials = { rootKeyHex, kdfSalt, authHash };
-  try {
-    if (isPkeyVaultKeysAvailable() && vaultKeys) {
+  if (isPkeyVaultKeysAvailable() && vaultKeys) {
+    try {
       const compromised = await vaultKeys.detectCompromisedDevice();
-      if (!compromised.compromised) {
-        await vaultKeys.storeUnlockBundle(JSON.stringify(credentials), _prompt);
-        await writeMeta();
-        await clearLegacyUnlockKeys();
-        await SecureStore.deleteItemAsync(UNLOCK_BUNDLE_ID_V2).catch(() => {});
-        return;
+      if (compromised.compromised) {
+        console.warn('[biometrics] refusing unlock bundle on compromised device');
+        return false;
       }
-      console.warn('[biometrics] skipping hardware bundle on compromised device');
+      await vaultKeys.storeUnlockBundle(JSON.stringify(credentials), prompt);
+      await writeMeta();
+      await clearLegacyUnlockKeys();
+      await SecureStore.deleteItemAsync(UNLOCK_BUNDLE_ID_V2).catch(() => {});
+      return true;
+    } catch (e) {
+      if (isUserCanceledAuth(e)) {
+        console.warn('[biometrics] hardware bundle write cancelled by the user');
+        return false;
+      }
+      console.warn('[biometrics] hardware bundle write failed; using SecureStore fallback', e);
     }
+  }
+  try {
     await persistUnlockCredentialsToSecureStore(credentials);
+    return true;
   } catch (e) {
     console.warn('[biometrics] persistUnlockCredentials failed', e);
+    return false;
   }
 };
 
 /**
- * Rewrites the biometric unlock blob to the current session root without a
- * Keystore prompt. Used after binding or unbinding the device secret so the
- * next fingerprint login still decrypts (the hardware unlock blob would
- * otherwise keep the previous root and fail fast-unlock).
+ * Rewrites the biometric unlock bundle to the current session root. Used after
+ * binding or unbinding the device secret so the next fingerprint login still
+ * decrypts (the stored bundle would otherwise keep the previous root).
+ *
+ * Same storage preference as {@link persistUnlockCredentials}: hardware first,
+ * SecureStore only when the module is missing or the hardware write fails.
+ * A compromised device and a canceled Android prompt both leave no bundle, so
+ * the login screen asks for the password instead of a fingerprint button that
+ * cannot unlock.
  */
 export async function replaceUnlockCredentials(
   rootKeyHex: string,
   kdfSalt: string,
-  authHash: string
+  authHash: string,
+  prompt = 'Unlock PKEY'
 ): Promise<void> {
-  const credentials: UnlockCredentials = { rootKeyHex, kdfSalt, authHash };
   if (isPkeyVaultKeysAvailable() && vaultKeys) {
     await vaultKeys.clearUnlockBundle().catch(() => {});
   }
-  try {
-    await persistUnlockCredentialsToSecureStore(credentials);
-  } catch (e) {
-    console.warn('[biometrics] replaceUnlockCredentials failed', e);
+  const persisted = await persistUnlockCredentials(
+    rootKeyHex,
+    kdfSalt,
+    authHash,
+    undefined,
+    prompt
+  );
+  if (!persisted) {
+    await clearUnlockCredentials();
   }
 }
 
@@ -341,7 +394,11 @@ export const clearUnlockCredentials = async (): Promise<void> => {
   await clearLegacyUnlockKeys();
 };
 
-/** Alias for {@link clearUnlockCredentials} used by logout / wipe flows. */
+/**
+ * Alias for {@link clearUnlockCredentials} used by reset and migration wipe.
+ * Logout does not call this: the bundle has to survive so the next biometric
+ * login can read it.
+ */
 export const destroyMasterKey = async (): Promise<void> => {
   await clearUnlockCredentials();
 };

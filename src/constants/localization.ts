@@ -83,6 +83,16 @@ export const LOCALE_DICT = {
     card_type_pass: 'Contraseña',
     card_type_phrase: 'Frase semilla',
     card_type_note: 'Nota segura',
+    card_section_account: 'Cuenta',
+    card_section_secret: 'Secreto',
+    card_section_otp: 'Código de un uso',
+    card_section_notes: 'Notas y etiquetas',
+    card_open_a11y: 'Abrir {title}',
+    card_editor_back: 'Volver a las llaves',
+    card_editor_loading: 'Abriendo la llave…',
+    card_editor_icon_a11y: 'Cambiar el icono de la llave',
+    card_otp_configured: 'Código configurado',
+    card_editor_phrase_count: '{count} palabras',
     autofill_match_title: 'Autocompletado del sistema',
     autofill_match_desc_android:
       'Con la bóveda desbloqueada, PKEY ofrece logins al sistema. El SO no permite activarlo en silencio: tenés que elegir PKEY en el selector de autocompletado. La caché se sincroniza sola al desbloquear.',
@@ -186,6 +196,21 @@ export const LOCALE_DICT = {
     integrity_view_releases: 'Ver releases oficiales',
     integrity_dev_warning:
       'Estás usando una build de desarrollo. La integridad NO puede compararse contra las releases oficiales.',
+    listing_demo_section_title: 'Ficha Play Store',
+    listing_demo_section_desc:
+      'Vacía esta bóveda (solo si está vacía o ya etiquetada demo) y carga llaves ficticias para capturas. Activa capturas de pantalla. Nunca uses una bóveda real.',
+    listing_demo_load_btn: 'Cargar datos de demo',
+    listing_demo_confirm_title: 'Cargar ficha demo',
+    listing_demo_confirm_message:
+      'Se borran las llaves con etiqueta demo y se cargan datos ficticios (Instagram, Google, banco…). Escribí DEMO para confirmar.',
+    listing_demo_confirm_mismatch: 'Escribí DEMO para confirmar.',
+    listing_demo_blocked_title: 'Bóveda real detectada',
+    listing_demo_blocked_message:
+      'Hay llaves sin la etiqueta demo. Crea una sesión nueva para la ficha, o etiquetá/borrá esas llaves primero.',
+    listing_demo_success_title: 'Ficha demo lista',
+    listing_demo_success_toast: 'Se cargaron {n} llaves ficticias. Capturas activadas.',
+    listing_demo_error: 'No se pudieron cargar los datos de demo. Inténtalo de nuevo.',
+    listing_demo_busy: 'Cargando datos de demo…',
     // ===== HIBP CHECK (audit B5) =====
     enable_hibp_check_title: 'Comprobar filtraciones (opt-in)',
     enable_hibp_check_desc:
@@ -247,8 +272,8 @@ export const LOCALE_DICT = {
       'Activa al menos un tipo de carácter (símbolos, números, mayúsculas o minúsculas) en Ajustes → Generador de Contraseñas.',
 
     // ===== NOTIFICATIONS =====
-    notif_screenshot_title: 'Captura detectada',
-    notif_screenshot_body: 'Se detectó una captura de pantalla mientras PKEY estaba abierta.',
+    notif_screenshot_title: 'Captura de pantalla tomada',
+    notif_screenshot_body: 'PKEY estaba abierta. La imagen puede mostrar datos de la bóveda.',
     notif_card_deleted_title: 'Llave eliminada',
     notif_card_deleted_toast: 'Llave "{title}" eliminada.',
     notif_copy_success_title: 'Copiado',
@@ -283,10 +308,10 @@ export const LOCALE_DICT = {
     strict_offline_desc:
       'La bóveda no sale a la red (ni LAN ni Internet): apaga y oculta el acceso web, la comprobación de filtraciones y los iconos remotos.',
     rooted_banner:
-      'Este dispositivo parece modificado (root/jailbreak). El desbloqueo rápido y el autocompletado quedan desactivados por defecto.',
+      'Este dispositivo parece modificado (root/jailbreak). La bóveda sigue usable. PKEY no guarda una copia nueva de la clave de desbloqueo fuera del hardware.',
     fast_unlock_title: 'Desbloqueo rápido',
     fast_unlock_desc:
-      'Guarda la clave de sesión en el hardware (TEE/StrongBox/Keychain). Hay que confirmar con biometría; no usa el PIN del sistema.',
+      'Guarda la clave de sesión para entrar con biometría, sin el PIN del sistema. En Android el Keystore puede estar en TEE o StrongBox. En iOS el ítem vive en el Keychain; eso no mide el Secure Enclave.',
     device_secret_title: 'Secreto de dispositivo',
     device_secret_desc:
       'El archivo .pkey no abre en otro equipo sin el kit de recuperación. Guardá el código impreso.',
@@ -296,6 +321,16 @@ export const LOCALE_DICT = {
     device_secret_enable_failed:
       'No se pudo activar el secreto de dispositivo. Hace falta hardware Keystore/Keychain.',
     require_auth_device_secret: 'Identificate para cambiar el secreto de dispositivo',
+    device_secret_kit_prompt_title: 'Kit de recuperación',
+    device_secret_kit_prompt_body:
+      'Esta bóveda está ligada a un secreto de dispositivo que este teléfono no tiene (viene de otro equipo o la biometría cambió). Ingresá el kit de recuperación que anotaste al activarlo.',
+    device_secret_kit_placeholder: 'XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XX',
+    device_secret_kit_invalid: 'El kit no tiene el formato esperado. Revisá los caracteres.',
+    device_secret_kit_wrong: 'Contraseña o kit de recuperación incorrectos.',
+    device_secret_kit_restored:
+      'Secreto de dispositivo guardado en este teléfono. El próximo inicio no pide el kit.',
+    device_secret_kit_restore_failed:
+      'No se pudo guardar el secreto en el hardware de este teléfono. El próximo inicio volverá a pedir el kit.',
 
     // Web PWA idle lock (independent of mobile auto-logout)
     web_auto_logout: 'Autobloqueo web',
@@ -318,8 +353,8 @@ export const LOCALE_DICT = {
     lang_description: 'Podés seguir el idioma del dispositivo.',
 
     // Auto-collapse
-    auto_collapse_title: 'Autoplegado de llaves',
-    auto_collapse_desc: 'Cierra las demás llaves al abrir una nueva.',
+    auto_collapse_title: 'Autoplegado de secciones',
+    auto_collapse_desc: 'Al abrir una sección de la llave, cierra las demás.',
 
     // Group by link
     group_by_link_title: 'Agrupar llaves por sitio',
@@ -447,7 +482,7 @@ export const LOCALE_DICT = {
     otp_camera_denied_desc:
       'Permiso de cámara denegado. Actívalo en Ajustes del sistema para escanear QR.',
     import_action: 'Seleccionar archivo local PKEY',
-    import_pass_prompt: 'Ingresa la contraseña maestra con la que se cifró el archivo backup:',
+    import_pass_prompt: 'Ingresa la contraseña maestra con la que se cifró el archivo de respaldo:',
     import_success: '¡Base de datos importada con éxito! Iniciando sesión...',
     import_pkey_reading: 'Leyendo archivo de respaldo…',
     import_pkey_decrypting: 'Descifrando respaldo y restaurando bóveda…',
@@ -463,27 +498,27 @@ export const LOCALE_DICT = {
       'Llegaste al máximo de respaldos .pkey. Borrá el más antiguo para poder crear otro.',
     export_limit_title: 'Máximo de archivos alcanzado',
     export_limit_reached:
-      'No puedes crear más de 10 respaldos .pkey en este dispositivo. Se recomienda borrar los más viejos y revisar tus respaldos si no los necesitas.',
+      'No podés crear más de 10 respaldos .pkey en este dispositivo. Se recomienda borrar los más viejos y revisar tus respaldos si no los necesitas.',
     export_limit_delete_oldest: 'Borrar el más antiguo y continuar',
     export_files_empty: 'Todavía no hay respaldos .pkey en este dispositivo.',
-    export_files_loading: 'Cargando exports…',
+    export_files_loading: 'Cargando respaldos…',
     export_free_space: 'Espacio libre: {size}',
     export_low_space_hint:
-      'Poco espacio libre. Liberá almacenamiento o borrá exports viejos antes de crear otro.',
+      'Poco espacio libre. Liberá almacenamiento o borrá respaldos viejos antes de crear otro.',
     export_no_space:
-      'No hay espacio suficiente en el dispositivo para exportar. Liberá almacenamiento o borrá exports viejos e intentá de nuevo.',
+      'No hay espacio suficiente en el dispositivo para exportar. Liberá almacenamiento o borrá respaldos viejos e intentá de nuevo.',
     export_share_unavailable: 'Compartir archivos no está disponible en este dispositivo.',
-    export_list_failed: 'No se pudo listar los exports de este dispositivo.',
-    export_share_a11y: 'Compartir archivo',
-    export_delete_a11y: 'Borrar archivo',
-    export_delete_title: 'Borrar export',
+    export_list_failed: 'No se pudo listar los respaldos de este dispositivo.',
+    export_share_a11y: 'Compartir {name}',
+    export_delete_a11y: 'Borrar {name}',
+    export_delete_title: 'Borrar respaldo',
     export_delete_confirm: '¿Borrar «{name}» de este dispositivo? No se puede deshacer.',
     export_delete_failed: 'No se pudo borrar el archivo.',
-    require_auth_delete_export: 'Identificate para borrar este export',
+    require_auth_delete_export: 'Identificate para borrar este respaldo',
     require_auth_export_plaintext: 'Identificate para exportar la bóveda en texto claro',
     require_auth_export_backup: 'Identificate para crear un archivo de respaldo',
-    export_saved_ok: 'Archivo guardado en Exports de PKEY',
-    export_saved_message: 'Disponible en el listado de exportaciones.',
+    export_saved_ok: 'Archivo guardado en la sección de respaldos',
+    export_saved_message: 'Lo ves en Seguridad, en la sección Respaldo y exportación.',
     export_shared_ok: 'Listo para compartir',
     export_shared_message:
       'CSV/JSON no se guarda en el teléfono. Si cancelaste el menú, no queda copia.',
@@ -492,6 +527,31 @@ export const LOCALE_DICT = {
       'El archivo incluirá contraseñas y secretos en texto claro. PKEY no lo guarda en el teléfono: solo abre el menú para compartirlo. Si cancelás, no queda copia. Cualquier destino que elijas (Drive, mail, Archivos) es tu responsabilidad.',
     export_needs_cards: 'No hay llaves para exportar. Desbloqueá la bóveda e intentá de nuevo.',
     export_failed: 'No se pudo completar la exportación.',
+    auto_backup_title: 'Respaldo automático',
+    auto_backup_desc:
+      'Guarda una copia cifrada del .pkey en Seguridad, en la sección de respaldos, con la frecuencia que elijas, aunque la bóveda no haya cambiado. Un aviso opcional permite compartirla. No hace falta elegir una carpeta.',
+    auto_backup_interval_label: 'Frecuencia',
+    auto_backup_interval_1m: '1 min',
+    auto_backup_interval_24h: '24 h',
+    auto_backup_interval_7d: '7 días',
+    auto_backup_fg_title: 'Respaldo cada 1 minuto',
+    auto_backup_fg_body:
+      'PKEY sigue guardando una copia cifrada en Seguridad, sección de respaldos.',
+    auto_backup_os_hint:
+      'En Android, 1 min sigue copiando al salir de PKEY (aviso silencioso) mientras el teléfono está encendido. Si la cerrás desde recientes, o en iPhone, el sistema no copia más seguido que cada 15 minutos y el minuto exacto se pone al día al abrir la app. Con el teléfono apagado no hay copia.',
+    auto_backup_share_action: 'Compartir',
+    auto_backup_ready_title: 'Respaldo creado correctamente',
+    auto_backup_ready_body:
+      '{name}. Está en Seguridad, en la sección de respaldos. Tocá Compartir para enviarlo.',
+    auto_backup_failed_title: 'No se pudo crear el respaldo',
+    auto_backup_failed_no_space:
+      'Falta espacio para guardar el archivo en la sección de respaldos. Liberá lugar y volvé a intentarlo.',
+    auto_backup_failed_write:
+      'No se pudo guardar el archivo en la sección de respaldos. Revisá el almacenamiento del teléfono.',
+    auto_backup_notify_denied:
+      'El archivo se guarda igual. Sin permiso de notificaciones no vas a ver el aviso para compartirlo.',
+    export_auto_badge: 'Automático',
+    export_auto_count_label: '{n} de {limit} automáticos',
     export_no_database: 'No hay una bóveda activa para exportar.',
 
     // ===== DEVICE MIGRATION =====
@@ -703,8 +763,8 @@ export const LOCALE_DICT = {
     web_blocked_clients: 'CLIENTES BLOQUEADOS',
     web_blocked_ips: 'IPs BLOQUEADAS',
     web_server_active: 'Servidor web activo',
-    web_fg_service_minimal_title: 'PKEY',
-    web_fg_service_minimal_body: 'Acceso web LAN activo en segundo plano.',
+    web_fg_service_minimal_title: 'Acceso web activo',
+    web_fg_service_minimal_body: 'La bóveda sigue disponible en la computadora, en esta red.',
     web_stat_authenticated: 'autenticados',
     web_stat_connecting: 'conectando',
     web_connected_browsers: 'NAVEGADORES CONECTADOS',
@@ -715,12 +775,15 @@ export const LOCALE_DICT = {
     web_client_alias_placeholder: 'Ej. Notebook Oficina',
     web_client_unknown: 'Navegador',
     web_client_block: 'Bloquear navegador',
-    web_notif_browser_title: 'Navegador sincronizado',
-    web_notif_browser_body: 'Un navegador se sincronizó con PKEY ({client}).',
+    web_unblock_client: 'Desbloquear {name}',
+    web_unblock_ip: 'Desbloquear {ip}',
+    web_notif_browser_title: 'Un navegador entró a la bóveda',
+    web_notif_browser_body: '{client}. Si no fuiste vos, tocá Bloquear.',
     web_notif_block_action: 'Bloquear',
     web_notif_deny_action: 'Rechazar',
-    web_notif_pwa_confirm_title: 'Confirmar en este teléfono',
-    web_notif_pwa_confirm_body: '{client} quiere {action}. Abrí PKEY para confirmar.',
+    web_notif_pwa_confirm_title: 'Confirmá esta acción',
+    web_notif_pwa_confirm_body:
+      '{client} quiere {action}. Abrí PKEY para permitirla, o tocá Rechazar.',
     web_action_confirm_title: 'El navegador pide confirmación',
     web_action_confirm_message: '{client} quiere {action}: {key}',
     web_action_confirm_card_unknown: 'una llave',
@@ -735,9 +798,9 @@ export const LOCALE_DICT = {
     web_action_confirm_deny: 'Rechazar',
     web_action_confirm_send_failed:
       'No se pudo enviar la decisión al navegador. Mantené la app abierta.',
-    web_notif_pwa_unlock_title: 'Desbloqueo del navegador',
+    web_notif_pwa_unlock_title: 'El navegador pide desbloqueo',
     web_notif_pwa_unlock_body:
-      '{client} quiere desbloquear la bóveda. Abrí PKEY y compará el código.',
+      '{client} quiere abrir la bóveda. Abrí PKEY y compará el código de 6 dígitos.',
     web_unlock_title: 'El navegador quiere desbloquear',
     web_unlock_message: '{client} pide desbloquear la bóveda web.',
     web_unlock_sas_hint: 'Compará este código de 6 dígitos con el del navegador antes de aprobar.',
@@ -748,10 +811,11 @@ export const LOCALE_DICT = {
     web_pwa_request_expired_title: 'El pedido del navegador expiró',
     web_pwa_request_expired_body:
       'Volvé a intentarlo desde la computadora. La app se había bloqueado o reiniciado y ya no puede completar ese pedido.',
-    web_notif_lan_changed_title: 'La computadora necesita la dirección de nuevo',
-    web_notif_lan_changed_body: 'Abrí PKEY en el teléfono y pulse Copiar dirección otra vez.',
+    web_notif_lan_changed_title: 'Hay que copiar la dirección de nuevo',
+    web_notif_lan_changed_body:
+      'Abrí PKEY y tocá Copiar dirección. Después pegala en la computadora.',
     web_notif_lan_changed_inapp:
-      'Abrí PKEY y pulse Copiar dirección otra vez. En la computadora, pegue esa dirección en el navegador.',
+      'Abrí PKEY y tocá Copiar dirección otra vez. En la computadora, pegá esa dirección en el navegador.',
     web_access_unavailable_title: 'Acceso web no disponible',
     web_access_unavailable_body:
       'El puerto {port} sigue en uso por una sesión anterior. Cierra PKEY por completo (quitar de recientes) y ábrela de nuevo, luego activa el acceso web.',
@@ -760,6 +824,7 @@ export const LOCALE_DICT = {
     web_access_ip_label: 'Abre en el navegador (misma red):',
     web_access_mdns_label: 'URL estable (.local):',
     web_access_copy: 'Copiar URL',
+    web_access_toggle_qr: 'Mostrar u ocultar código QR',
     web_access_copied: 'Dirección copiada. En la computadora: pegar y Enter.',
     web_access_share: 'Enviar a la computadora',
     web_access_steps:
@@ -1049,6 +1114,16 @@ export const LOCALE_DICT = {
     card_type_pass: 'Password',
     card_type_phrase: 'Seed phrase',
     card_type_note: 'Secure note',
+    card_section_account: 'Account',
+    card_section_secret: 'Secret',
+    card_section_otp: 'One-time code',
+    card_section_notes: 'Notes and tags',
+    card_open_a11y: 'Open {title}',
+    card_editor_back: 'Back to keys',
+    card_editor_loading: 'Opening this key…',
+    card_editor_icon_a11y: 'Change key icon',
+    card_otp_configured: 'Code configured',
+    card_editor_phrase_count: '{count} words',
     autofill_match_title: 'System autofill',
     autofill_match_desc_android:
       'While the vault is unlocked, PKEY offers logins to the system. The OS does not allow silent activation — you must pick PKEY in the autofill picker. The cache syncs automatically on unlock.',
@@ -1151,6 +1226,21 @@ export const LOCALE_DICT = {
     integrity_view_releases: 'View official releases',
     integrity_dev_warning:
       'You are running a development build. Integrity CANNOT be verified against official releases.',
+    listing_demo_section_title: 'Play Store listing',
+    listing_demo_section_desc:
+      'Clears this vault (only if it is empty or already tagged demo) and loads fictional keys for screenshots. Turns screenshots on. Never use a real vault.',
+    listing_demo_load_btn: 'Load demo data',
+    listing_demo_confirm_title: 'Load listing demo',
+    listing_demo_confirm_message:
+      'Demo-tagged keys are removed and replaced with fictional data (Instagram, Google, bank…). Type DEMO to confirm.',
+    listing_demo_confirm_mismatch: 'Type DEMO to confirm.',
+    listing_demo_blocked_title: 'Real vault detected',
+    listing_demo_blocked_message:
+      'This vault still has keys without the demo tag. Create a new session for the listing, or tag/delete those keys first.',
+    listing_demo_success_title: 'Listing demo ready',
+    listing_demo_success_toast: 'Loaded {n} fictional keys. Screenshots enabled.',
+    listing_demo_error: 'Could not load demo data. Try again.',
+    listing_demo_busy: 'Loading demo data…',
     // ===== HIBP CHECK (audit B5) =====
     enable_hibp_check_title: 'Check for breaches (opt-in)',
     enable_hibp_check_desc:
@@ -1211,8 +1301,8 @@ export const LOCALE_DICT = {
       'Enable at least one character type (symbols, numbers, uppercase, or lowercase) in Settings → Password Generator.',
 
     // ===== NOTIFICATIONS =====
-    notif_screenshot_title: 'Screenshot detected',
-    notif_screenshot_body: 'A screenshot was taken while PKEY was open.',
+    notif_screenshot_title: 'Screenshot taken',
+    notif_screenshot_body: 'PKEY was open. The image may show vault data.',
     notif_card_deleted_title: 'Key deleted',
     notif_card_deleted_toast: 'Key "{title}" deleted.',
     notif_copy_success_title: 'Copied',
@@ -1247,10 +1337,10 @@ export const LOCALE_DICT = {
     strict_offline_desc:
       'The vault stays off the network (LAN and Internet): turns off and hides web access, breach checks, and remote icons.',
     rooted_banner:
-      'This device looks modified (root/jailbreak). Fast unlock and autofill are off by default.',
+      'This device looks modified (root/jailbreak). The vault stays usable. PKEY does not store a new copy of the unlock key outside hardware.',
     fast_unlock_title: 'Fast unlock',
     fast_unlock_desc:
-      'Stores the session key in hardware (TEE/StrongBox/Keychain). Biometrics are required; the device PIN is not used.',
+      'Stores the session key for biometric unlock, without the device PIN. On Android the Keystore may sit in the TEE or StrongBox. On iOS the item lives in the Keychain; that is not a Secure Enclave measurement.',
     device_secret_title: 'Device secret',
     device_secret_desc:
       'A copied .pkey file will not open on another device without the recovery kit. Keep the printed code.',
@@ -1260,6 +1350,16 @@ export const LOCALE_DICT = {
     device_secret_enable_failed:
       'Could not enable the device secret. Hardware Keystore/Keychain is required.',
     require_auth_device_secret: 'Authenticate to change the device secret',
+    device_secret_kit_prompt_title: 'Recovery kit',
+    device_secret_kit_prompt_body:
+      'This vault is bound to a device secret this phone does not have (it comes from another device, or biometrics changed). Enter the recovery kit you wrote down when you enabled it.',
+    device_secret_kit_placeholder: 'XXXX-XXXX-XXXX-XXXX-XXXX-XXXX-XX',
+    device_secret_kit_invalid: 'The kit does not have the expected format. Check the characters.',
+    device_secret_kit_wrong: 'Wrong password or recovery kit.',
+    device_secret_kit_restored:
+      'Device secret stored on this phone. The next unlock will not ask for the kit.',
+    device_secret_kit_restore_failed:
+      'Could not store the secret in this phone’s hardware. The next unlock will ask for the kit again.',
 
     // Web PWA idle lock (independent of mobile auto-logout)
     web_auto_logout: 'Web auto-lock',
@@ -1282,8 +1382,8 @@ export const LOCALE_DICT = {
     lang_description: 'You can follow the device language.',
 
     // Auto-collapse
-    auto_collapse_title: 'Auto-collapse keys',
-    auto_collapse_desc: 'Collapses older open keys when a new key opens.',
+    auto_collapse_title: 'Auto-collapse sections',
+    auto_collapse_desc: 'Opening one section of a key closes the others.',
 
     // Group by link
     group_by_link_title: 'Group keys by site',
@@ -1431,24 +1531,24 @@ export const LOCALE_DICT = {
       'You cannot create more than 10 .pkey backups on this device. It is recommended to delete older ones and review your backups if you no longer need them.',
     export_limit_delete_oldest: 'Delete the oldest and continue',
     export_files_empty: 'No .pkey backups on this device yet.',
-    export_files_loading: 'Loading exports…',
+    export_files_loading: 'Loading backups…',
     export_free_space: 'Free space: {size}',
     export_low_space_hint:
-      'Low free space. Free up storage or delete old exports before creating another.',
+      'Low free space. Free up storage or delete old backups before creating another.',
     export_no_space:
-      'Not enough free space on this device to export. Free up storage or delete old exports, then try again.',
+      'Not enough free space on this device to export. Free up storage or delete old backups, then try again.',
     export_share_unavailable: 'Sharing files is not available on this device.',
-    export_list_failed: 'Could not list exports on this device.',
-    export_share_a11y: 'Share file',
-    export_delete_a11y: 'Delete file',
-    export_delete_title: 'Delete export',
+    export_list_failed: 'Could not list backups on this device.',
+    export_share_a11y: 'Share {name}',
+    export_delete_a11y: 'Delete {name}',
+    export_delete_title: 'Delete backup',
     export_delete_confirm: 'Delete “{name}” from this device? This cannot be undone.',
     export_delete_failed: 'Could not delete the file.',
-    require_auth_delete_export: 'Authenticate to delete this export',
+    require_auth_delete_export: 'Authenticate to delete this backup',
     require_auth_export_plaintext: 'Authenticate to export the vault in cleartext',
     require_auth_export_backup: 'Authenticate to create a backup file',
-    export_saved_ok: 'Saved to PKEY Exports',
-    export_saved_message: 'Available in the exports list.',
+    export_saved_ok: 'File saved in the Backup section',
+    export_saved_message: 'Find it in Security, under Backup & export.',
     export_shared_ok: 'Ready to share',
     export_shared_message:
       'CSV/JSON is not kept on the phone. If you cancelled the share sheet, no copy remains.',
@@ -1457,6 +1557,30 @@ export const LOCALE_DICT = {
       'The file will include passwords and secrets in cleartext. PKEY does not save it on the phone: it only opens the share sheet. If you cancel, no copy remains. Any destination you pick (Drive, mail, Files) is your responsibility.',
     export_needs_cards: 'No keys to export. Unlock the vault and try again.',
     export_failed: 'Export could not be completed.',
+    auto_backup_title: 'Automatic backup',
+    auto_backup_desc:
+      'Saves an encrypted .pkey copy in Security, under Backup & export, on the interval you choose, even if the vault did not change. An optional alert lets you share it. You do not pick a folder.',
+    auto_backup_interval_label: 'Frequency',
+    auto_backup_interval_1m: '1 min',
+    auto_backup_interval_24h: '24 h',
+    auto_backup_interval_7d: '7 days',
+    auto_backup_fg_title: 'Backup every 1 minute',
+    auto_backup_fg_body: 'PKEY keeps saving an encrypted copy in Security, under Backup & export.',
+    auto_backup_os_hint:
+      'On Android, 1 min keeps copying after you leave PKEY (silent notice) while the phone is on. If you swipe PKEY away, or on iPhone, the system will not copy more often than every 15 minutes and the exact minute catches up when you open the app. A powered-off phone does not run it.',
+    auto_backup_share_action: 'Share',
+    auto_backup_ready_title: 'Backup created successfully',
+    auto_backup_ready_body:
+      '{name}. It is in Security, under Backup & export. Tap Share to send it.',
+    auto_backup_failed_title: 'Backup could not be created',
+    auto_backup_failed_no_space:
+      'There is not enough free space to save the file in the Backup section. Free some space and try again.',
+    auto_backup_failed_write:
+      'The file could not be saved in the Backup section. Check the phone storage.',
+    auto_backup_notify_denied:
+      'The file is still saved. Without notification permission you will not see the share alert.',
+    export_auto_badge: 'Automatic',
+    export_auto_count_label: '{n} of {limit} automatic backups',
     export_no_database: 'There is no active vault to export.',
 
     // ===== DEVICE MIGRATION =====
@@ -1667,8 +1791,8 @@ export const LOCALE_DICT = {
     web_blocked_clients: 'BLOCKED CLIENTS',
     web_blocked_ips: 'BLOCKED IPs',
     web_server_active: 'Web server active',
-    web_fg_service_minimal_title: 'PKEY',
-    web_fg_service_minimal_body: 'LAN web access is running in the background.',
+    web_fg_service_minimal_title: 'Web access is on',
+    web_fg_service_minimal_body: 'The vault stays available on your computer, on this network.',
     web_stat_authenticated: 'authenticated',
     web_stat_connecting: 'connecting',
     web_connected_browsers: 'CONNECTED BROWSERS',
@@ -1679,12 +1803,14 @@ export const LOCALE_DICT = {
     web_client_alias_placeholder: 'e.g. Living-room laptop',
     web_client_unknown: 'Browser',
     web_client_block: 'Block browser',
-    web_notif_browser_title: 'Browser synced',
-    web_notif_browser_body: 'A browser synced with PKEY ({client}).',
+    web_unblock_client: 'Unblock {name}',
+    web_unblock_ip: 'Unblock {ip}',
+    web_notif_browser_title: 'A browser opened the vault',
+    web_notif_browser_body: '{client}. If this was not you, tap Block.',
     web_notif_block_action: 'Block',
     web_notif_deny_action: 'Deny',
-    web_notif_pwa_confirm_title: 'Confirm on this phone',
-    web_notif_pwa_confirm_body: '{client} wants to {action}. Open PKEY to confirm.',
+    web_notif_pwa_confirm_title: 'Confirm this action',
+    web_notif_pwa_confirm_body: '{client} wants to {action}. Open PKEY to allow it, or tap Deny.',
     web_action_confirm_title: 'Browser needs confirmation',
     web_action_confirm_message: '{client} wants to {action}: {key}',
     web_action_confirm_card_unknown: 'a key',
@@ -1698,9 +1824,9 @@ export const LOCALE_DICT = {
     web_action_confirm_approve: 'Confirm',
     web_action_confirm_deny: 'Deny',
     web_action_confirm_send_failed: 'Could not send the choice to the browser. Keep the app open.',
-    web_notif_pwa_unlock_title: 'Browser unlock',
+    web_notif_pwa_unlock_title: 'Browser is asking to unlock',
     web_notif_pwa_unlock_body:
-      '{client} wants to unlock the vault. Open PKEY and compare the code.',
+      '{client} wants to open the vault. Open PKEY and compare the 6-digit code.',
     web_unlock_title: 'Browser wants to unlock',
     web_unlock_message: '{client} is asking to unlock the web vault.',
     web_unlock_sas_hint: 'Compare this 6-digit code with the browser before you approve.',
@@ -1711,8 +1837,8 @@ export const LOCALE_DICT = {
     web_pwa_request_expired_title: 'The browser request expired',
     web_pwa_request_expired_body:
       'Try again from the computer. The app had locked or restarted and can no longer complete that request.',
-    web_notif_lan_changed_title: 'The computer needs the address again',
-    web_notif_lan_changed_body: 'Open PKEY on the phone and tap Copy address again.',
+    web_notif_lan_changed_title: 'Copy the address again',
+    web_notif_lan_changed_body: 'Open PKEY and tap Copy address. Then paste it on the computer.',
     web_notif_lan_changed_inapp:
       'Open PKEY and tap Copy address again. On the computer, paste that address in the browser.',
     web_access_unavailable_title: 'Web access unavailable',
@@ -1723,6 +1849,7 @@ export const LOCALE_DICT = {
     web_access_ip_label: 'Open in browser (same network):',
     web_access_mdns_label: 'Stable URL (.local):',
     web_access_copy: 'Copy URL',
+    web_access_toggle_qr: 'Show or hide QR code',
     web_access_copied: 'Address copied. On the computer: paste and press Enter.',
     web_access_share: 'Send to the computer',
     web_access_steps:

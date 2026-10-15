@@ -14,3 +14,4 @@ export * from './useAnimatedNumber';
 export * from './useBackgroundAutoLogout';
 export * from './useForegroundIdleLock';
 export * from './useOsNotificationRouting';
+export * from './useAutoBackup';

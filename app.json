@@ -2,7 +2,7 @@
   "expo": {
     "name": "PKEY",
     "slug": "pkey",
-    "version": "1.0.31",
+    "version": "1.0.32",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
     "scheme": "pkeysync",
@@ -29,7 +29,7 @@
         "backgroundColor": "#000000"
       },
       "package": "com.severaltool.pkey",
-      "versionCode": 31,
+      "versionCode": 32,
       "softwareKeyboardLayoutMode": "resize",
       "permissions": [
         "POST_NOTIFICATIONS",
@@ -39,7 +39,8 @@
         "ACCESS_WIFI_STATE",
         "CHANGE_WIFI_MULTICAST_STATE",
         "FOREGROUND_SERVICE",
-        "FOREGROUND_SERVICE_CONNECTED_DEVICE"
+        "FOREGROUND_SERVICE_CONNECTED_DEVICE",
+        "FOREGROUND_SERVICE_DATA_SYNC"
       ]
     },
     "web": {
@@ -107,16 +108,17 @@
           "enableFileSharing": true,
           "supportsOpeningDocumentsInPlace": true
         }
-      ]
+      ],
+      "expo-background-task"
     ],
     "extra": {
       "eas": {
         "projectId": "d63bdc8d-1197-42a0-a353-0f2c74dc7f75"
       },
       "buildIntegrity": {
-        "commit": "6e514b2119e83258a5433feedb9d3690b289dec9",
-        "commitShort": "6e514b2",
-        "buildTimestamp": "2026-09-29T21:06:56.702Z"
+        "commit": "c84abe3848826580353175a977580930f7adeaf5",
+        "commitShort": "c84abe3",
+        "buildTimestamp": "2026-08-02T20:57:23.463Z"
       }
     },
     "owner": "severaltool"

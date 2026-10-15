@@ -3,10 +3,23 @@
   "compilerOptions": {
     "jsx": "react-native",
     "strict": true,
+    // TypeScript 6 no longer auto-includes node_modules/@types/*; Jest globals need this.
+    "types": ["jest", "node"],
     "paths": {
       "@/*": ["./*"],
       "@pkey/core": ["./packages/core/dist/index.d.ts"]
     }
   },
-  "include": ["**/*.ts", "**/*.tsx"]
+  "include": ["**/*.ts", "**/*.tsx"],
+  // `exclude` replaces (not merges) the one from expo/tsconfig.base, so its entries are repeated.
+  // packages/* have their own tsconfig (web-client is Solid.js, not react-native JSX).
+  "exclude": [
+    "node_modules",
+    "babel.config.js",
+    "metro.config.js",
+    "jest.config.js",
+    "android",
+    "ios",
+    "packages"
+  ]
 }

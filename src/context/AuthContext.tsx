@@ -1,7 +1,15 @@
 /**
  * @fileoverview Session auth: create/open vault, biometric unlock, logout, and re-auth prompts.
  */
-import React, { createContext, useContext, useEffect, useState, useCallback } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { flushPendingDatabaseWrite } from '../hooks/useDebouncedVaultWrite';
 import { useCoreState } from './CoreStateContext';
 import { useUI } from './UIContext';
@@ -20,11 +28,14 @@ import {
   destroyMasterKey,
   UnlockCredentials,
 } from '../services/biometrics';
+import { readEncryptedPayload, destroyDatabase } from '../services/storage';
 import {
-  readEncryptedPayload,
-  writeDatabaseToDisk as writeDbService,
-  destroyDatabase,
-} from '../services/storage';
+  clearVaultPersistence,
+  noteVaultPersisted,
+  persistVaultDisk,
+  stageVault,
+  vaultForSync,
+} from '../services/vaultPersistence';
 import { LocalCipher } from '../services/crypto';
 import { generateUuidV4, normalizeTheme } from '@pkey/core';
 import { normalizeAppSettings, normalizeCards, ensureVaultSessionId } from '../utils/appSettings';
@@ -41,9 +52,11 @@ import {
   decryptVaultPayload,
   decryptVaultWithImportedKey,
   establishSessionFromPassword,
+  isDeviceSecretRequiredError,
   isNativeKdfUnavailableError,
   verifyTypedPassword,
 } from '../services/nativeVault';
+import { parseRecoveryKit, restoreDeviceSecret } from '../services/deviceSecret';
 import { getUnlockBlockRemainingMs, recordUnlockFailure } from '../services/unlockThrottle';
 import {
   getLastSuccessfulUnlock,
@@ -55,13 +68,18 @@ import {
 import { yieldToUi } from '../utils/yieldToUi';
 import { clearAutofillCache, syncAutofillCache } from '../services/autofill';
 import { flushSecureClipboard } from '../services/secureClipboard';
+import { purgeEphemeralExports } from '../services/exportsStorage';
 import { clearSyncUndo } from '../services/syncUndo';
-import {
-  hydrateVaultSecrets,
-  clearVaultSecrets,
-  cardsWithVaultSecrets,
-} from '../services/vaultSecrets';
+import { clearVaultSecrets } from '../services/vaultSecrets';
 import { createEmptySessionDatabase } from '../utils/emptySessionDatabase';
+import {
+  clearPublicUiPrefs,
+  publicUiPrefsFromSettings,
+  rememberPublicUiFromSettings,
+} from '../utils/publicUiPrefs';
+import { clearAutoBackupRuntime } from '../services/autoBackupPrefs';
+import { resumeAutoBackup, suspendAutoBackup } from '../services/autoBackupRun';
+import { syncAutoBackupNativeSchedule } from '../services/autoBackupTask';
 import { useForegroundIdleLock } from '../hooks/useForegroundIdleLock';
 import { stopWebAccessOnVaultLock } from '../utils/webAccessLock';
 
@@ -70,6 +88,12 @@ export type AuthContextData = Readonly<{
   handleOpenSession: (pass: string) => Promise<void>;
   handleBiometricLogin: () => Promise<void>;
   handleLogout: () => void;
+  /**
+   * Same secret cleanup as {@link handleLogout}, plus the biometric unlock
+   * bundle. Does not flush a pending vault write unless asked: after a
+   * committed migration that flush would overwrite the new file.
+   */
+  lockToLoginShell: (options?: { readonly flushPending?: boolean }) => Promise<void>;
   /** Danger zone: bio (if available) + master password, then show confirm modal. */
   handleResetSession: () => void;
   /** Wipes local vault and biometric unlock material; returns to create-session. */
@@ -101,6 +125,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const {
     db,
     setDb,
+    dbRef,
     masterPassword,
     setMasterPassword,
     repeatPassword,
@@ -152,47 +177,70 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   useEffect(() => {
     if (!isLogged) return;
     setCustomPromptInput('');
-    setCustomPrompt((prev) => (prev.visible ? { ...prev, visible: false } : prev));
+    setCustomPrompt((prev) => {
+      if (!prev.visible) return prev;
+      const dismiss = prev.onDismiss;
+      queueMicrotask(() => dismiss?.());
+      return { ...prev, visible: false, error: undefined, onDismiss: undefined };
+    });
   }, [isLogged, setCustomPrompt, setCustomPromptInput]);
 
   useScreenshotPolicy(isLogged, db.settings?.allowScreenshots, db.settings?.language);
 
-  const promptMasterPasswordVerify = (passwordPrompt: string, onSuccess: () => void) => {
+  const promptMasterPasswordVerify = (
+    passwordPrompt: string,
+    onSuccess: () => void
+  ): Promise<void> => {
     const t = getT();
-    setCustomPromptInput('');
-    setCustomPrompt({
-      visible: true,
-      title: t.enter_pass,
-      message: passwordPrompt,
-      secure: true,
-      busyMessage: '',
-      error: undefined,
-      onConfirm: async (inputPassword: string) => {
-        const showPromptError = () => {
-          setCustomPrompt((prev) => ({ ...prev, error: t.wrong_key_p }));
-        };
-        if (!inputPassword?.trim()) {
-          showPromptError();
-          return;
-        }
-        setAuthBusy(true);
-        await yieldToUi();
-        try {
-          const ok = await verifyTypedPassword(inputPassword, db.passwordHash, db.salt);
-          if (ok) {
-            setCustomPromptInput('');
-            setCustomPrompt((prev) => ({ ...prev, visible: false, error: undefined }));
-            onSuccess();
-          } else {
+    return new Promise((resolve) => {
+      let settled = false;
+      const finish = (): void => {
+        if (settled) return;
+        settled = true;
+        resolve();
+      };
+      setCustomPromptInput('');
+      setCustomPrompt({
+        visible: true,
+        title: t.enter_pass,
+        message: passwordPrompt,
+        secure: true,
+        busyMessage: '',
+        error: undefined,
+        onDismiss: () => finish(),
+        onConfirm: async (inputPassword: string) => {
+          const showPromptError = () => {
+            setCustomPrompt((prev) => ({ ...prev, error: t.wrong_key_p }));
+          };
+          if (!inputPassword?.trim()) {
             showPromptError();
+            return;
           }
-        } catch (err) {
-          console.warn('[AuthContext] password verification failed:', err);
-          showPromptError();
-        } finally {
-          setAuthBusy(false);
-        }
-      },
+          setAuthBusy(true);
+          await yieldToUi();
+          try {
+            const ok = await verifyTypedPassword(inputPassword, db.passwordHash, db.salt);
+            if (ok) {
+              setCustomPromptInput('');
+              setCustomPrompt((prev) => ({
+                ...prev,
+                visible: false,
+                error: undefined,
+                onDismiss: undefined,
+              }));
+              onSuccess();
+              finish();
+            } else {
+              showPromptError();
+            }
+          } catch (err) {
+            console.warn('[AuthContext] password verification failed:', err);
+            showPromptError();
+          } finally {
+            setAuthBusy(false);
+          }
+        },
+      });
     });
   };
 
@@ -208,7 +256,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
     }
-    promptMasterPasswordVerify(textPrompt, onSuccess);
+    await promptMasterPasswordVerify(textPrompt, onSuccess);
   };
 
   /** Biometric gate when hardware is enrolled, then master password always required. */
@@ -249,7 +297,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const closeLoginPrompt = () => {
     setCustomPromptInput('');
-    setCustomPrompt((prev) => (prev.visible ? { ...prev, visible: false } : prev));
+    setCustomPrompt((prev) => {
+      if (!prev.visible) return prev;
+      const dismiss = prev.onDismiss;
+      queueMicrotask(() => dismiss?.());
+      return { ...prev, visible: false, error: undefined, onDismiss: undefined };
+    });
   };
 
   const finalizeSuccessfulLogin = async (
@@ -259,8 +312,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     method: UnlockMethod = 'password'
   ) => {
     const normalizedDb = await upgradeVaultOnUnlock(pass, parsedDb, encryptedPayload);
+    const staged = stageVault(normalizedDb);
     setMasterPassword('');
-    setDb(hydrateVaultSecrets(normalizedDb));
+    setDb(staged.ui);
+    noteVaultPersisted(staged.disk);
+    rememberPublicUiFromSettings(staged.ui.settings);
     closeLoginPrompt();
     await markUnlockSuccess(method);
     setIsLogged(true);
@@ -324,12 +380,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSessionRootKey(credentials.rootKeyHex, normalizedDb.salt!);
     }
     setMasterPassword('');
-    setDb(hydrateVaultSecrets(normalizedDb));
+    const staged = stageVault(normalizedDb);
+    setDb(staged.ui);
+    rememberPublicUiFromSettings(staged.ui.settings);
     if (!parsedDb.passwordHashScheme || parsedDb.sessionId !== normalizedDb.sessionId) {
       // Persist the stamp without a master-password prompt (session root is live).
-      void writeDbService(normalizedDb, '').catch(() => {
+      void persistVaultDisk(staged.disk, '').catch(() => {
         /* best-effort — in-memory scheme still helps this session */
       });
+    } else {
+      noteVaultPersisted(staged.disk);
     }
     closeLoginPrompt();
     await markUnlockSuccess(method);
@@ -337,19 +397,82 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return true;
   };
 
-  /**
-   * Biometric-only fast unlock: skips PBKDF2 using persisted root key.
-   * Never called from manual password login.
-   */
-  const tryFastUnlock = async (pass: string, encryptedPayload: string): Promise<boolean> => {
-    const bundle = await loadUnlockBundle(getT().biometrics_reason);
-    if (!bundle) return false;
-    LocalCipher.seedRootKeyCache(pass, bundle.kdfSalt, bundle.rootKeyHex);
-    return tryFastUnlockFromCredentials(bundle, encryptedPayload);
-  };
-
   const formatUnlockLockedError = (remainingMs: number): string => {
     return getT().login_locked_countdown.replace('{n}', String(Math.ceil(remainingMs / 1000)));
+  };
+
+  /**
+   * The vault is `deviceBound` and this phone has no usable device secret
+   * (copied `.pkey`, fresh install after migration, or biometrics re-enrolled
+   * on an older build). Collects the recovery kit, retries the unlock with it
+   * and, on success, seals the secret back into local hardware so the next
+   * unlock does not need the kit again.
+   */
+  const promptRecoveryKitAndUnlock = (
+    pass: string,
+    encryptedPayload: string,
+    method: UnlockMethod
+  ) => {
+    const t = getT();
+    setCustomPromptInput('');
+    setCustomPrompt({
+      visible: true,
+      title: t.device_secret_kit_prompt_title,
+      message: t.device_secret_kit_prompt_body,
+      secure: false,
+      placeholder: t.device_secret_kit_placeholder,
+      busyMessage: '',
+      error: undefined,
+      onDismiss: undefined,
+      onConfirm: async (kitInput: string) => {
+        const secretHex = parseRecoveryKit(kitInput || '');
+        if (!secretHex) {
+          setCustomPrompt((prev) => ({ ...prev, error: t.device_secret_kit_invalid }));
+          return;
+        }
+        const blockedMs = await getUnlockBlockRemainingMs();
+        if (blockedMs > 0) {
+          setCustomPrompt((prev) => ({ ...prev, error: formatUnlockLockedError(blockedMs) }));
+          return;
+        }
+        setAuthBusy(true);
+        await yieldToUi();
+        try {
+          const decrypted = await decryptVaultPayload(pass, encryptedPayload, {
+            deviceSecretHex: secretHex,
+          });
+          const parsedDb = parseEncryptedDatabaseJson(decrypted);
+          if (!parsedDb?.passwordHash || !parsedDb.salt) {
+            const nextBlockedMs = await recordUnlockFailure();
+            await markUnlockFailure(method);
+            setCustomPrompt((prev) => ({
+              ...prev,
+              error:
+                nextBlockedMs > 0
+                  ? formatUnlockLockedError(nextBlockedMs)
+                  : t.device_secret_kit_wrong,
+            }));
+            return;
+          }
+          await finalizeSuccessfulLogin(pass, parsedDb, encryptedPayload, method);
+          const restored = await restoreDeviceSecret(secretHex, t.require_auth_device_secret);
+          notifications.toast({
+            title: t.device_secret_title,
+            message: restored ? t.device_secret_kit_restored : t.device_secret_kit_restore_failed,
+            variant: restored ? 'success' : 'warning',
+          });
+        } catch (err) {
+          if (isNativeKdfUnavailableError(err)) {
+            setCustomPrompt((prev) => ({ ...prev, error: t.auth_native_kdf_unavailable }));
+            return;
+          }
+          console.warn('[AuthContext] recovery kit unlock failed:', err);
+          setCustomPrompt((prev) => ({ ...prev, error: t.device_secret_kit_wrong }));
+        } finally {
+          setAuthBusy(false);
+        }
+      },
+    });
   };
 
   const handleOpenSessionSlow = async (
@@ -359,7 +482,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   ) => {
     const t = getT();
 
-    const decryptedString = await decryptVaultPayload(pass, encryptedPayload);
+    let decryptedString: string;
+    try {
+      decryptedString = await decryptVaultPayload(pass, encryptedPayload);
+    } catch (err) {
+      if (isDeviceSecretRequiredError(err)) {
+        // Not a wrong password: no throttle strike, ask for the recovery kit.
+        promptRecoveryKitAndUnlock(pass, encryptedPayload, method);
+        return;
+      }
+      throw err;
+    }
     const parsedDb = parseEncryptedDatabaseJson(decryptedString);
 
     if (parsedDb?.passwordHash && parsedDb.salt) {
@@ -432,8 +565,10 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         cards: [],
       };
 
-      setDb(initialDb);
-      await writeDbService(initialDb, '');
+      const staged = stageVault(initialDb);
+      setDb(staged.ui);
+      rememberPublicUiFromSettings(staged.ui.settings);
+      await persistVaultDisk(staged.disk, '');
       // Never pass the master password itself — see biometrics.ts audit note (C2).
       await persistUnlockCredentials(rootKeyHex, salt, authVerifier);
       setMasterPassword('');
@@ -531,22 +666,42 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   /**
-   * Stops LAN web access immediately, flushes a pending vault write, then
-   * clears session keys and unlock UI state.
+   * Stops LAN web access, drops the in-memory root key and SecretStore, and
+   * returns the UI to the login shell. `flushPending` persists a debounced
+   * vault edit first (lock / abort). Migration finish and sender wipe pass
+   * false so that write cannot recreate a vault that was just replaced or deleted.
    */
-  const handleLogout = () => {
-    stopWebAccessOnVaultLock();
-    void (async () => {
+  const releaseUnlockedSession = useCallback(
+    async (options: {
+      readonly flushPending: boolean;
+      readonly destroyBiometricUnlock: boolean;
+    }) => {
+      stopWebAccessOnVaultLock();
       try {
-        await flushPendingDatabaseWrite();
-      } finally {
+        if (options.flushPending) {
+          await flushPendingDatabaseWrite();
+        }
+      } catch (err) {
+        console.error('[auth] flush before lock failed:', err);
+      }
+      try {
         LocalCipher.clearPbkdf2Cache();
         clearSessionRootKey();
         clearVaultSecrets();
-        setDb(createEmptySessionDatabase());
-        void clearAutofillCache();
-        void flushSecureClipboard();
+        clearVaultPersistence();
+        const ui = publicUiPrefsFromSettings(dbRef.current.settings);
+        rememberPublicUiFromSettings(ui);
+        setDb(createEmptySessionDatabase(ui));
+        await clearAutofillCache();
+        await flushSecureClipboard();
+        await purgeEphemeralExports();
         clearSyncUndo();
+        if (options.destroyBiometricUnlock) {
+          await destroyMasterKey();
+        }
+      } catch (err) {
+        console.error('[auth] session release failed:', err);
+      } finally {
         setMasterPassword('');
         setRepeatPassword('');
         setUnlockedAt(null);
@@ -556,8 +711,31 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         setCardsFilter(null);
         setCardsSortMode('updated');
       }
-    })();
-  };
+    },
+    [
+      dbRef,
+      setCardsFilter,
+      setCardsSortMode,
+      setDb,
+      setExpandedCardId,
+      setIsLogged,
+      setMasterPassword,
+      setRepeatPassword,
+    ]
+  );
+
+  const handleLogout = useCallback(() => {
+    void releaseUnlockedSession({ flushPending: true, destroyBiometricUnlock: false });
+  }, [releaseUnlockedSession]);
+
+  const lockToLoginShell = useCallback(
+    (options?: { readonly flushPending?: boolean }) =>
+      releaseUnlockedSession({
+        flushPending: options?.flushPending === true,
+        destroyBiometricUnlock: true,
+      }),
+    [releaseUnlockedSession]
+  );
 
   useBackgroundAutoLogout({
     isLogged,
@@ -576,8 +754,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       void clearAutofillCache();
       return;
     }
-    if (db?.cards) void syncAutofillCache(cardsWithVaultSecrets(db.cards));
-  }, [isLogged, db?.cards]);
+    const disk = vaultForSync();
+    if (disk?.cards) void syncAutofillCache(disk.cards);
+  }, [isLogged]);
 
   const handleResetSession = () => {
     const t = getT();
@@ -592,6 +771,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     const t = getT();
     stopWebAccessOnVaultLock();
     try {
+      await suspendAutoBackup();
       await flushPendingDatabaseWrite();
       await yieldToUi();
       await destroyDatabase();
@@ -599,7 +779,11 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       LocalCipher.clearPbkdf2Cache();
       clearSessionRootKey();
       clearVaultSecrets();
+      clearVaultPersistence();
       void clearAutofillCache();
+      await clearPublicUiPrefs();
+      await clearAutoBackupRuntime();
+      await syncAutoBackupNativeSchedule();
       setDb(createEmptySessionDatabase());
       setHasSession(false);
       setIsLogged(false);
@@ -620,28 +804,65 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         variant: 'error',
       });
       throw err;
+    } finally {
+      resumeAutoBackup();
+      await flushSecureClipboard();
+      await purgeEphemeralExports();
     }
   };
 
-  return (
-    <AuthContext.Provider
-      value={{
-        handleCreateSession,
-        handleOpenSession,
-        handleBiometricLogin,
-        handleLogout,
-        handleResetSession,
-        executeResetSession,
-        performBiometricOrPasswordCheck,
-        performBiometricAndPasswordCheck,
-        unlockedAt,
-        unlockMethod,
-        lastUnlock,
-        unlockHistory,
-        refreshUnlockHistory,
-      }}
-    >
-      {children}
-    </AuthContext.Provider>
+  const handlersRef = useRef({
+    handleCreateSession,
+    handleOpenSession,
+    handleBiometricLogin,
+    handleResetSession,
+    executeResetSession,
+    performBiometricOrPasswordCheck,
+    performBiometricAndPasswordCheck,
+  });
+  handlersRef.current = {
+    handleCreateSession,
+    handleOpenSession,
+    handleBiometricLogin,
+    handleResetSession,
+    executeResetSession,
+    performBiometricOrPasswordCheck,
+    performBiometricAndPasswordCheck,
+  };
+
+  const value = useMemo<AuthContextData>(
+    () => ({
+      handleCreateSession: () => handlersRef.current.handleCreateSession(),
+      handleOpenSession: (pass) => handlersRef.current.handleOpenSession(pass),
+      handleBiometricLogin: () => handlersRef.current.handleBiometricLogin(),
+      handleLogout,
+      lockToLoginShell,
+      handleResetSession: () => handlersRef.current.handleResetSession(),
+      executeResetSession: () => handlersRef.current.executeResetSession(),
+      performBiometricOrPasswordCheck: (onSuccess, textPrompt) =>
+        handlersRef.current.performBiometricOrPasswordCheck(onSuccess, textPrompt),
+      performBiometricAndPasswordCheck: (onSuccess, biometricPrompt, passwordPrompt) =>
+        handlersRef.current.performBiometricAndPasswordCheck(
+          onSuccess,
+          biometricPrompt,
+          passwordPrompt
+        ),
+      unlockedAt,
+      unlockMethod,
+      lastUnlock,
+      unlockHistory,
+      refreshUnlockHistory,
+    }),
+    [
+      handleLogout,
+      lockToLoginShell,
+      unlockedAt,
+      unlockMethod,
+      lastUnlock,
+      unlockHistory,
+      refreshUnlockHistory,
+    ]
   );
+
+  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 };

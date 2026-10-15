@@ -7,10 +7,10 @@
 import React, { useCallback, useMemo } from 'react';
 import { DarkTheme, DefaultTheme, NavigationContainer, type Theme } from '@react-navigation/native';
 import { createNativeBottomTabNavigator } from '@react-navigation/bottom-tabs/unstable';
-import { useUI } from '../context/UIContext';
+import { useDashboardTabName, useSetDashboardTab } from '../context/UIContext';
 import { useSettings } from '../context/SettingsContext';
 import { CardsTab } from '../screens/CardsTab';
-import { dashboardNavRef, navigateDashboardTab } from './dashboardNav';
+import { dashboardNavRef, focusedDashboardTabName, navigateDashboardTab } from './dashboardNav';
 import { dashboardTabIcon } from './dashboardTabIcons';
 import { isDashboardTabName, type DashboardTabParamList } from './types';
 
@@ -18,11 +18,12 @@ const Tab = createNativeBottomTabNavigator<DashboardTabParamList>();
 
 /**
  * Native bottom-tab host for Cards / Stats / Security / Settings.
- * Two-way syncs with `UIContext.currentTab` so Stats chips and OS notification
+ * Two-way syncs with `useDashboardTabName` so Stats chips and OS notification
  * routing keep working without knowing about the navigator.
  */
 export function DashboardTabNavigator(): React.JSX.Element {
-  const { currentTab, setCurrentTab } = useUI();
+  const currentTab = useDashboardTabName();
+  const setCurrentTab = useSetDashboardTab();
   const { t, c, isDark } = useSettings();
 
   const navTheme = useMemo<Theme>(
@@ -42,7 +43,7 @@ export function DashboardTabNavigator(): React.JSX.Element {
   );
 
   const onStateChange = useCallback(() => {
-    const name = dashboardNavRef.getCurrentRoute()?.name;
+    const name = focusedDashboardTabName(dashboardNavRef.getState());
     if (isDashboardTabName(name) && name !== currentTab) {
       setCurrentTab(name);
     }

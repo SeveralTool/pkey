@@ -3,7 +3,11 @@
  */
 
 import { getNativeTcpSocket } from '../utils/nativeTcpSocket';
-import { getTlsListenOptions, fingerprintTlsCertificatePem } from './tlsCredentials';
+import {
+  getTlsListenOptions,
+  fingerprintTlsCertificatePem,
+  normalizeTlsFingerprint,
+} from './tlsCredentials';
 import {
   ChallengeStore,
   computeChallengeResponse,
@@ -60,6 +64,7 @@ interface ActiveMigration {
   senderIpAlternates: string[];
   senderCallbackPort: number;
   senderWipeProof: string | null;
+  senderTlsFingerprint: string;
   usedNonces: Set<string>;
 }
 
@@ -306,8 +311,15 @@ export class MigrationReceiverServer {
     pairingSecret: string;
     sessionId: string;
     senderWipeProof: string;
+    senderTlsFingerprint: string;
   } | null {
-    if (!this.active?.senderIp || !this.active.senderWipeProof) return null;
+    if (
+      !this.active?.senderIp ||
+      !this.active.senderWipeProof ||
+      !this.active.senderTlsFingerprint
+    ) {
+      return null;
+    }
     return {
       senderIp: this.active.senderIp,
       senderIpAlternates: this.active.senderIpAlternates || [],
@@ -316,6 +328,7 @@ export class MigrationReceiverServer {
       pairingSecret: this.pairingSecret,
       sessionId: this.sessionId,
       senderWipeProof: this.active.senderWipeProof,
+      senderTlsFingerprint: this.active.senderTlsFingerprint,
     };
   }
 
@@ -447,6 +460,23 @@ export class MigrationReceiverServer {
         return;
       }
 
+      const senderTlsFingerprint = normalizeTlsFingerprint(payload.senderTlsFingerprint);
+      if (!senderTlsFingerprint) {
+        this.authLimiter.recordFailure(clientIp);
+        writeHttpEncryptedResponse(
+          socket,
+          200,
+          this.channelKeyHex,
+          {
+            ok: false,
+            error: 'Sender certificate fingerprint required',
+            code: 'AUTH_FAILED',
+          },
+          keepAlive
+        );
+        return;
+      }
+
       const sourceId = req.headers['x-source-id'] || 'sender';
 
       if (this.localPasswordHash) {
@@ -486,7 +516,8 @@ export class MigrationReceiverServer {
       const reported = typeof payload.senderIp === 'string' ? payload.senderIp.trim() : '';
       const peer = clientIp && clientIp !== 'unknown' ? clientIp : '';
       const isV4 = (h: string) => /^\d{1,3}(\.\d{1,3}){3}$/.test(h);
-      const primary = (isV4(peer) ? peer : '') || (isV4(reported) ? reported : '') || peer || reported || null;
+      const primary =
+        (isV4(peer) ? peer : '') || (isV4(reported) ? reported : '') || peer || reported || null;
       const alternates = [peer, reported].filter(
         (h, i, arr) => !!h && h !== primary && arr.indexOf(h) === i
       );
@@ -500,6 +531,7 @@ export class MigrationReceiverServer {
         senderIpAlternates: alternates,
         senderCallbackPort: payload.senderCallbackPort || 7394,
         senderWipeProof: payload.senderWipeProof,
+        senderTlsFingerprint,
         usedNonces: new Set(this.preAuthNonces),
       };
       this.setPhase('authenticating', 15);

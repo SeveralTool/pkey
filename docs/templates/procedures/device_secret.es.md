@@ -17,7 +17,8 @@ Al activar el interruptor, PKEY muestra un código para anotar o imprimir. Ese c
 ## CÓMO USARLO
 
 - En este teléfono: la contraseña maestra o la biometría siguen alcanzando. El secreto queda en el hardware del aparato.
-- En otro teléfono, al restaurar un `.pkey` o tras migrar: necesitás la contraseña maestra y el kit. Sin el kit el archivo no se abre; puede parecer que la contraseña está mal.
+- En otro teléfono, al restaurar un `.pkey` o tras migrar: necesitás la contraseña maestra y el kit. Después de la contraseña, PKEY pide el kit; una vez abierta la bóveda, lo guarda en el hardware de ese teléfono y no vuelve a pedirlo.
+- Cambiar la huella o el rostro registrados en este teléfono no desactiva el secreto. Si una versión anterior de PKEY lo perdió por eso, el inicio pide el kit una sola vez.
 - CSV y JSON en claro tampoco usan el kit.
 
 ## SI LO PERDÉS

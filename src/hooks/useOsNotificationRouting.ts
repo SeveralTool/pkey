@@ -5,7 +5,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useAuth } from '../context/AuthContext';
 import { useCoreState } from '../context/CoreStateContext';
 import { useSync } from '../context/SyncContext';
-import { useUI } from '../context/UIContext';
+import { useSetDashboardTab } from '../context/UIContext';
 import { getLocale } from '../constants/localization';
 import {
   configureOsNotifications,
@@ -16,12 +16,14 @@ import {
   setPendingOsNotificationIntent,
 } from '../notifications/osNotificationPending';
 import type { OsNotificationIntent } from '../notifications/osNotificationData';
+import { notifications } from '../notifications/notificationRef';
+import { AUTO_BACKUP_OPEN_TAB, shareAutoBackupFromNotification } from '../services/autoBackupShare';
 
 /** Subscribes to OS notification responses and applies tab / block intents. */
 export function useOsNotificationRouting(): void {
   const { isLogged, db } = useCoreState();
   const { performBiometricOrPasswordCheck } = useAuth();
-  const { setCurrentTab } = useUI();
+  const setCurrentTab = useSetDashboardTab();
   const { blockClientIdentity, handleActionConfirmOsIntent, handleUnlockOsIntent } = useSync();
 
   const isLoggedRef = useRef(isLogged);
@@ -36,7 +38,8 @@ export function useOsNotificationRouting(): void {
       if (intent.kind === 'pwa-confirm-open' || intent.kind === 'pwa-confirm-deny') {
         handleActionConfirmOsIntent(
           intent.kind === 'pwa-confirm-deny' ? 'deny' : 'open',
-          intent.requestId ?? null
+          intent.requestId ?? null,
+          { afterVaultUnlock: intent.unlockedAtDispatch }
         );
         return;
       }
@@ -50,6 +53,22 @@ export function useOsNotificationRouting(): void {
       }
       if (intent.kind === 'web-open') {
         setCurrentTab('security');
+        return;
+      }
+      if (intent.kind === 'auto-backup-open') {
+        setCurrentTab(AUTO_BACKUP_OPEN_TAB);
+        return;
+      }
+      if (intent.kind === 'auto-backup-share') {
+        void shareAutoBackupFromNotification(intent.filename).then((result) => {
+          if (result === 'shared') return;
+          const t = getLocale(db.settings?.language);
+          notifications.alert({
+            title: t.alert_error_title,
+            message: t.export_failed,
+            variant: 'error',
+          });
+        });
         return;
       }
 
@@ -84,7 +103,11 @@ export function useOsNotificationRouting(): void {
 
   useEffect(() => {
     const t = getLocale(db.settings?.language);
-    void configureOsNotifications(t.web_notif_block_action, t.web_notif_deny_action);
+    void configureOsNotifications(
+      t.web_notif_block_action,
+      t.web_notif_deny_action,
+      t.auto_backup_share_action
+    );
   }, [db.settings?.language]);
 
   useEffect(() => {

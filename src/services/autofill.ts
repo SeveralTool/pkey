@@ -11,7 +11,6 @@ import {
   collectIdentities,
   hostsOf,
   androidPackagesOf,
-  registrableDomain,
   type PasswordCard,
 } from '@pkey/core';
 import PkeyAutofill from 'pkey-autofill';
@@ -35,10 +34,7 @@ export function buildAutofillCacheJson(cards: PasswordCard[]): string {
     .filter((c) => c?.id && c.type === 'PASSWORD')
     .map((c) => {
       const ids = collectIdentities(c.link || '', c.uris);
-      const hostList = hostsOf(ids);
-      const domains = [
-        ...new Set(hostList.flatMap((h) => [h, registrableDomain(h)].filter(Boolean))),
-      ];
+      const domains = [...new Set(hostsOf(ids).filter(Boolean))];
       const packages = androidPackagesOf(ids);
       return {
         id: c.id,

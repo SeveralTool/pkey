@@ -1,10 +1,15 @@
 /**
- * @fileoverview Expanded editor body for a vault card (mounted only when open).
+ * @fileoverview Editor form for one vault card.
+ *
+ * Mounted on the card editor screen. Sections mount their fields only while
+ * open, so the one-time-code timer and the QR camera stay off until needed.
  */
-import React, { useLayoutEffect, useMemo, useState } from 'react';
+import React, { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { View, Text, TouchableOpacity, TextInput, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { PasswordCard, AppSettings } from '../../types';
+import type { LocaleStrings } from '../../constants/localization';
+import { ACCENT_SELECTED_ALPHA, withAlpha, type ThemeColors } from '../../styles/colors';
 import { copySecret } from '../../services/secureClipboard';
 import { useCardAnalysis, type DuplicateIndex } from '../../hooks/useCardAnalysis';
 import { useDebounce } from '../../hooks/useDebounce';
@@ -28,19 +33,31 @@ import { processOtpInput } from './otpInput';
 import { suppressAutoLogout, QR_SCANNER_GRACE_MS } from '../../utils/autoLogoutGuard';
 import { CardTagsEditor } from './CardTagsEditor';
 import { getCardCopyPayload, buildCopySuccessMessage } from './swipeActions';
-import { HibpStatusBadge } from './HibpStatusBadge';
+import { CardEditorSection } from './CardEditorSection';
+import { CardSecretStatusTags } from './CardSecretStatusTags';
+import { useReducedMotion } from '../../hooks/useReducedMotion';
+import {
+  adjustOpenSections,
+  initialCardEditorSection,
+  toggleEditorSection,
+  type CardEditorSectionId,
+} from '../../navigation/cardsStack';
+import { editorPhraseSummary } from './editorIdentity';
 
 export type CardExpandedBodyProps = {
   item: PasswordCard;
   isDark: boolean;
-  c: Record<string, string>;
-  t: Record<string, string>;
+  c: ThemeColors;
+  t: LocaleStrings;
   appSettings: AppSettings;
   usernameIndex: DuplicateIndex;
   passwordIndex: DuplicateIndex;
   autoCollapse: boolean;
-  onCollapseAfterSave: () => void;
-  onUpdateCardValue: (cardId: string, field: keyof PasswordCard, value: unknown) => void;
+  onUpdateCardValue: (
+    cardId: string,
+    field: keyof PasswordCard,
+    value: PasswordCard[keyof PasswordCard]
+  ) => void;
   onUpdatePasswordListItem: (cardId: string, index: number, value: string) => void;
   onAddPasswordListItem: (cardId: string) => void;
   onSaveCard: (cardId: string) => void;
@@ -48,7 +65,7 @@ export type CardExpandedBodyProps = {
   onDeleteCard: (cardId: string) => void;
   onBiometricCheck: (onSuccess: () => void, prompt: string) => void;
   onQrScannerActiveChange?: (active: boolean) => void;
-  onReady: () => void;
+  onReady?: () => void;
   hibpEnabled: boolean;
   hibpChecking: boolean;
   onCheckHibp: (cardId: string) => void;
@@ -63,7 +80,6 @@ export const CardExpandedBody = React.memo(function CardExpandedBody({
   usernameIndex,
   passwordIndex,
   autoCollapse,
-  onCollapseAfterSave,
   onUpdateCardValue,
   onUpdatePasswordListItem,
   onAddPasswordListItem,
@@ -83,6 +99,12 @@ export const CardExpandedBody = React.memo(function CardExpandedBody({
   const [showOtpSecret, setShowOtpSecret] = useState(false);
   const [revealCopyPassword, setRevealCopyPassword] = useState(false);
   const [qrOpen, setQrOpen] = useState(false);
+  const reduceMotion = useReducedMotion();
+  const [openSections, setOpenSections] = useState<ReadonlySet<CardEditorSectionId>>(
+    () => new Set([initialCardEditorSection(item)])
+  );
+  const sectionAdjustment = adjustOpenSections(openSections, item.type, autoCollapse);
+  if (sectionAdjustment) setOpenSections(sectionAdjustment);
   const [textareaHeights, setTextareaHeights] = useState<{ [key: string]: number }>({});
   const updateTextareaHeight = (id: string, height: number) => {
     setTextareaHeights((prev) => ({ ...prev, [id]: Math.max(70, height) }));
@@ -103,8 +125,14 @@ export const CardExpandedBody = React.memo(function CardExpandedBody({
     t,
   });
   useLayoutEffect(() => {
-    onReady();
+    onReady?.();
   }, [onReady]);
+
+  useEffect(() => {
+    if (item.type === 'PASSWORD') return;
+    setQrOpen(false);
+    onQrScannerActiveChange?.(false);
+  }, [item.type, onQrScannerActiveChange]);
 
   const [saveState, setSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
 
@@ -127,12 +155,10 @@ export const CardExpandedBody = React.memo(function CardExpandedBody({
       }
       setSaveState('saved');
       await new Promise((resolve) => setTimeout(resolve, 900));
-      if (!autoCollapse) onCollapseAfterSave();
     } catch {
       onSaveCard(item.id);
       setSaveState('saved');
       await new Promise((resolve) => setTimeout(resolve, 900));
-      if (!autoCollapse) onCollapseAfterSave();
     } finally {
       setSaveState('idle');
     }
@@ -180,6 +206,11 @@ export const CardExpandedBody = React.memo(function CardExpandedBody({
   const handleCloseOtpQrScanner = () => {
     setQrOpen(false);
     onQrScannerActiveChange?.(false);
+  };
+
+  const selectSection = (section: CardEditorSectionId) => {
+    if (qrOpen) handleCloseOtpQrScanner();
+    setOpenSections((current) => toggleEditorSection(current, section, autoCollapse));
   };
 
   const cardTags = item.tags ?? [];
@@ -312,643 +343,695 @@ export const CardExpandedBody = React.memo(function CardExpandedBody({
   };
 
   const typeChangeLocked = isCardTypeLocked(item.id);
+  const selectedFill = withAlpha(c.accent, ACCENT_SELECTED_ALPHA);
+  const phraseSummary =
+    item.type === 'SECRET_PHRASE'
+      ? editorPhraseSummary(item.passwordList, t.card_editor_phrase_count)
+      : null;
+  const secretStatusLabel = [
+    item.type === 'PASSWORD' ? strength?.label : null,
+    hasRepPass ? t.tag_duplicated : null,
+  ]
+    .filter((part): part is string => !!part)
+    .join('. ');
+  const secretSummary =
+    item.type === 'PASSWORD' ? secretStatusLabel || undefined : (phraseSummary ?? undefined);
+  const secretTags =
+    item.type === 'PASSWORD' ? (
+      <CardSecretStatusTags
+        strength={strength}
+        duplicated={hasRepPass}
+        card={item}
+        c={c}
+        t={t}
+        hibpEnabled={hibpEnabled}
+        compact
+      />
+    ) : null;
+  const notesSummary = (item.notes ?? '').trim().replace(/\s+/g, ' ') || undefined;
+  const otpSummary = item.otpSecret?.trim() ? t.card_otp_configured : undefined;
 
   return (
-    <View style={[styles.expandedBodyPanelFrame, { borderTopColor: c.border }]}>
-      {/* Type toggle selection */}
-      <View style={styles.inputFieldBlockGroup}>
-        <Text style={[styles.smallLabelUppercase, { color: c.textMuted }]}>
-          {t.card_type_label}
-        </Text>
-        <View style={styles.horizontalWrapFlexRowPicker}>
-          <TouchableOpacity
-            style={[
-              styles.pickerCellTabOption,
-              {
-                borderColor: item.type === 'PASSWORD' ? c.accent : c.border,
-                backgroundColor:
-                  item.type === 'PASSWORD' ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
-                opacity: typeChangeLocked && item.type !== 'PASSWORD' ? 0.5 : 1,
-              },
-            ]}
-            onPress={() => handleTypeChangeAttempt('PASSWORD')}
-            disabled={typeChangeLocked && item.type !== 'PASSWORD'}
-            accessibilityRole="button"
-            accessibilityState={{
-              selected: item.type === 'PASSWORD',
-              disabled: typeChangeLocked && item.type !== 'PASSWORD',
-            }}
-            accessibilityLabel={t.card_type_pass}
-          >
-            <Text
-              style={[
-                styles.pickerCellText,
-                {
-                  color: item.type === 'PASSWORD' ? c.accent : c.textMuted,
-                  textDecorationLine:
-                    typeChangeLocked && item.type !== 'PASSWORD' ? 'line-through' : 'none',
-                },
-              ]}
-            >
-              {t.card_type_pass}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.pickerCellTabOption,
-              {
-                borderColor: item.type === 'SECRET_PHRASE' ? c.accent : c.border,
-                backgroundColor:
-                  item.type === 'SECRET_PHRASE' ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
-                opacity: typeChangeLocked && item.type !== 'SECRET_PHRASE' ? 0.5 : 1,
-              },
-            ]}
-            onPress={() => handleTypeChangeAttempt('SECRET_PHRASE')}
-            disabled={typeChangeLocked && item.type !== 'SECRET_PHRASE'}
-            accessibilityRole="button"
-            accessibilityState={{
-              selected: item.type === 'SECRET_PHRASE',
-              disabled: typeChangeLocked && item.type !== 'SECRET_PHRASE',
-            }}
-            accessibilityLabel={t.card_type_phrase}
-          >
-            <Text
-              style={[
-                styles.pickerCellText,
-                {
-                  color: item.type === 'SECRET_PHRASE' ? c.accent : c.textMuted,
-                  textDecorationLine:
-                    typeChangeLocked && item.type !== 'SECRET_PHRASE' ? 'line-through' : 'none',
-                },
-              ]}
-            >
-              {t.card_type_phrase}
-            </Text>
-          </TouchableOpacity>
-          <TouchableOpacity
-            style={[
-              styles.pickerCellTabOption,
-              {
-                borderColor: item.type === 'NOTE' ? c.accent : c.border,
-                backgroundColor: item.type === 'NOTE' ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
-                opacity: typeChangeLocked && item.type !== 'NOTE' ? 0.5 : 1,
-              },
-            ]}
-            onPress={() => handleTypeChangeAttempt('NOTE')}
-            disabled={typeChangeLocked && item.type !== 'NOTE'}
-            accessibilityRole="button"
-            accessibilityState={{
-              selected: item.type === 'NOTE',
-              disabled: typeChangeLocked && item.type !== 'NOTE',
-            }}
-            accessibilityLabel={t.card_type_note}
-          >
-            <Text
-              style={[
-                styles.pickerCellText,
-                {
-                  color: item.type === 'NOTE' ? c.accent : c.textMuted,
-                  textDecorationLine:
-                    typeChangeLocked && item.type !== 'NOTE' ? 'line-through' : 'none',
-                },
-              ]}
-            >
-              {t.card_type_note}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Card Name Editable title */}
-      <View style={styles.inputFieldBlockGroup}>
-        <Text style={[styles.smallLabelUppercase, { color: c.textMuted }]}>
-          {t.card_title_label}
-        </Text>
-        <TextInput
-          style={[
-            styles.cardFieldInputStyle,
-            {
-              borderColor: c.border,
-              color: c.text,
-              backgroundColor: isDark ? '#1F1F24' : '#F3F4F6',
-              minHeight: 44,
-              textAlignVertical: 'top',
-            },
-          ]}
-          value={item.title}
-          onChangeText={(text) =>
-            onUpdateCardValue(item.id, 'title', clampField(text, CARD_TITLE_MAX).value)
-          }
-          placeholder={t.example_instagram}
-          placeholderTextColor={c.textMuted}
-          multiline
-          scrollEnabled
-          maxLength={CARD_TITLE_MAX}
-        />
-      </View>
-
-      {/* Core Username Login value */}
-      <View style={styles.inputFieldBlockGroup}>
-        <Text style={[styles.smallLabelUppercase, { color: c.textMuted }]}>
-          {t.card_user_label}
-        </Text>
-        <TextInput
-          style={[
-            styles.cardFieldInputStyle,
-            {
-              borderColor: c.border,
-              color: c.text,
-              backgroundColor: isDark ? '#1F1F24' : '#F3F4F6',
-            },
-          ]}
-          value={item.username}
-          onChangeText={(text) =>
-            onUpdateCardValue(item.id, 'username', clampField(text, CARD_USERNAME_MAX).value)
-          }
-          placeholder={t.example_email}
-          placeholderTextColor={c.textMuted}
-          autoCapitalize="none"
-          maxLength={CARD_USERNAME_MAX}
-        />
-        {hasRepLogin && (
-          <View style={styles.tagLineRowFlex}>
-            <View
-              style={[
-                styles.warningInLineTagFrame,
-                { borderColor: c.warning, backgroundColor: 'rgba(245, 158, 11, 0.08)' },
-              ]}
-            >
-              <Ionicons name="alert-circle" size={12} color={c.warning} />
-              <Text style={[styles.warningInLineText, { color: c.warning }]}>
-                {t.tag_duplicated}
-              </Text>
-            </View>
-          </View>
-        )}
-      </View>
-
-      {/* Standard KEY inputs / Secret Phrase / Note */}
-      {item.type === 'PASSWORD' ? (
+    <View>
+      <CardEditorSection
+        title={t.card_section_account}
+        expanded={openSections.has('account')}
+        onPress={() => selectSection('account')}
+        backgroundColor={c.cardBg}
+        borderColor={c.border}
+        textColor={c.text}
+        mutedColor={c.textMuted}
+        reduceMotion={reduceMotion}
+      >
+        {/* Type toggle selection */}
         <View style={styles.inputFieldBlockGroup}>
           <Text style={[styles.smallLabelUppercase, { color: c.textMuted }]}>
-            {t.card_pass_label}
+            {t.card_type_label}
           </Text>
-          <View style={styles.relativeInputGroupRowContainer}>
-            <TextInput
+          <View style={styles.horizontalWrapFlexRowPicker}>
+            <TouchableOpacity
               style={[
-                styles.cardFieldInputStyle,
+                styles.pickerCellTabOption,
                 {
-                  flex: 1,
-                  paddingRight: 50,
-                  borderColor: c.border,
-                  color: c.text,
-                  backgroundColor: isDark ? '#1F1F24' : '#F3F4F6',
+                  borderColor: item.type === 'PASSWORD' ? c.accent : c.border,
+                  backgroundColor: item.type === 'PASSWORD' ? selectedFill : 'transparent',
+                  opacity: typeChangeLocked && item.type !== 'PASSWORD' ? 0.5 : 1,
                 },
               ]}
-              value={item.passwordList[0] || ''}
-              onChangeText={(text) => onUpdatePasswordListItem(item.id, 0, text)}
-              secureTextEntry={!revealCopyPassword}
-              placeholder={t.placeholder_password_mask}
-              placeholderTextColor={c.textMuted}
-            />
-          </View>
-
-          {/* Verification strength metrics & reuse descriptors underneath password input */}
-          {(strength || hibpEnabled) && (
-            <View style={styles.tagLineRowFlex}>
-              {strength && (
-                <View
-                  style={[
-                    styles.warningInLineTagFrame,
-                    {
-                      borderColor: strength.color,
-                      backgroundColor: 'rgba(59, 130, 246, 0.05)',
-                    },
-                  ]}
-                >
-                  <Ionicons name="shield" size={10} color={strength.color} />
-                  <Text style={[styles.warningInLineText, { color: strength.color }]}>
-                    {strength.label}
-                  </Text>
-                </View>
-              )}
-
-              {hasRepPass && (
-                <View
-                  style={[
-                    styles.warningInLineTagFrame,
-                    { borderColor: c.danger, backgroundColor: 'rgba(239, 68, 68, 0.05)' },
-                  ]}
-                >
-                  <Ionicons name="alert-circle" size={10} color={c.danger} />
-                  <Text style={[styles.warningInLineText, { color: c.danger }]}>
-                    {t.tag_duplicated}
-                  </Text>
-                </View>
-              )}
-
-              {/* Have I Been Pwned status: one more tag in the same row */}
-              {hibpEnabled && <HibpStatusBadge card={item} c={c} t={t} enabled />}
-            </View>
-          )}
-
-          {!hibpEnabled && (
-            <Text style={[styles.settingRowMutedSubTextDesc, { color: c.textMuted }]}>
-              {t.hibp_disabled_hint}
-            </Text>
-          )}
-        </View>
-      ) : item.type === 'SECRET_PHRASE' ? (
-        <View style={styles.inputFieldBlockGroup}>
-          <Text style={[styles.smallLabelUppercase, { color: c.textMuted }]}>
-            {t.card_phrase_inputs}
-          </Text>
-          {item.passwordList.map((word, wIndex) => (
-            <View key={wIndex} style={styles.seedPhraseWordInputBlockRow}>
-              <Text style={[styles.seedIndexerCountLabel, { color: c.textMuted }]}>
-                #{wIndex + 1}
-              </Text>
-              <TextInput
+              onPress={() => handleTypeChangeAttempt('PASSWORD')}
+              disabled={typeChangeLocked && item.type !== 'PASSWORD'}
+              accessibilityRole="button"
+              accessibilityState={{
+                selected: item.type === 'PASSWORD',
+                disabled: typeChangeLocked && item.type !== 'PASSWORD',
+              }}
+              accessibilityLabel={t.card_type_pass}
+            >
+              <Text
                 style={[
-                  styles.cardFieldInputStyle,
+                  styles.pickerCellText,
                   {
-                    flex: 1,
-                    marginVertical: spacing.xs,
-                    borderColor: c.border,
-                    color: c.text,
-                    backgroundColor: isDark ? '#1F1F24' : '#F3F4F6',
+                    color: item.type === 'PASSWORD' ? c.accent : c.textMuted,
+                    textDecorationLine:
+                      typeChangeLocked && item.type !== 'PASSWORD' ? 'line-through' : 'none',
                   },
                 ]}
-                value={word}
-                onChangeText={(text) => onUpdatePasswordListItem(item.id, wIndex, text)}
-                placeholder={`${t.seed_phrase_placeholder} ${wIndex + 1}`}
-                placeholderTextColor={c.textMuted}
-                autoFocus={wIndex === item.passwordList.length - 1 && wIndex > 0}
-              />
-            </View>
-          ))}
-          <TouchableOpacity
-            style={[
-              styles.secGhostOutlineButton,
-              {
-                paddingVertical: spacing.sm,
-                borderColor: c.border,
-                marginTop: spacing.xs + 2,
-              },
-            ]}
-            onPress={() => onAddPasswordListItem(item.id)}
-            accessibilityRole="button"
-            accessibilityLabel={t.add_phrase_word}
-          >
-            <Ionicons
-              name="add-circle-outline"
-              size={16}
-              color={c.accent}
-              style={{ marginRight: 6 }}
-            />
-            <Text style={[styles.secGhostOutlineText, { color: c.accent, fontSize: 13 }]}>
-              {t.add_phrase_word}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
-
-      {item.type === 'PASSWORD' && (
-        <View style={styles.inputFieldBlockGroup}>
-          <Text style={[styles.smallLabelUppercase, { color: c.textMuted }]}>
-            {t.card_otp_secret_label}
-          </Text>
-          <View style={styles.relativeInputGroupRowContainer}>
-            <TextInput
-              style={[
-                styles.cardFieldInputStyle,
-                {
-                  flex: 1,
-                  paddingRight: 45,
-                  borderColor: c.border,
-                  color: c.text,
-                  backgroundColor: isDark ? '#1F1F24' : '#F3F4F6',
-                },
-              ]}
-              value={item.otpSecret ?? ''}
-              onChangeText={handleOtpInput}
-              secureTextEntry={!showOtpSecret}
-              placeholder={t.card_otp_paste_uri}
-              placeholderTextColor={c.textMuted}
-              autoCapitalize="none"
-              autoCorrect={false}
-            />
-            <TouchableOpacity
-              style={styles.absoluteInlineInputIconPositionButton}
-              onPress={() => setShowOtpSecret((v) => !v)}
-              accessibilityRole="button"
-              accessibilityLabel={showOtpSecret ? t.card_otp_hide : t.card_otp_show}
-            >
-              <Ionicons
-                name={showOtpSecret ? 'eye-off-outline' : 'eye-outline'}
-                size={16}
-                color={c.textMuted}
-              />
-            </TouchableOpacity>
-          </View>
-          {item.otpSecret?.trim() ? (
-            <OtpCountdown
-              otpSecret={item.otpSecret}
-              otpAlgorithm={item.otpAlgorithm}
-              otpDigits={item.otpDigits}
-              otpPeriod={item.otpPeriod}
-              isDark={isDark}
-              c={c}
-              t={t}
-              onBiometricCheck={onBiometricCheck}
-              onCopyCode={(code) => handleSecureCopyText(code, t.copy_label_otp)}
-            />
-          ) : null}
-          {qrOpen ? (
-            <OtpQrScannerPanel
-              cardBg={isDark ? '#1F1F24' : '#F3F4F6'}
-              borderColor={c.border}
-              text={c.text}
-              textMuted={c.textMuted}
-              labels={{
-                title: t.card_otp_scan,
-                cancel: t.cancel_button,
-                hint: t.card_otp_paste_uri,
-                permission: t.migration_camera_permission,
-              }}
-              onClose={handleCloseOtpQrScanner}
-              onInvalidScan={() => {
-                notifications.toast({
-                  title: t.otp_invalid_uri_title,
-                  message: t.otp_invalid_uri_desc,
-                  variant: 'error',
-                  duration: 5000,
-                });
-              }}
-              onScan={(parsed) => {
-                onUpdateCardValue(item.id, 'otpSecret', parsed.secret);
-                if (parsed.algorithm) onUpdateCardValue(item.id, 'otpAlgorithm', parsed.algorithm);
-                if (parsed.digits) onUpdateCardValue(item.id, 'otpDigits', parsed.digits);
-                if (parsed.period) onUpdateCardValue(item.id, 'otpPeriod', parsed.period);
-                const detail = [parsed.issuer, parsed.account].filter(Boolean).join(' · ');
-                notifications.toast({
-                  title: t.otp_scan_success_title,
-                  message: detail || t.otp_scan_success_message,
-                  variant: 'success',
-                  duration: 3000,
-                });
-              }}
-            />
-          ) : (
-            <TouchableOpacity
-              style={[
-                styles.secGhostOutlineButton,
-                {
-                  paddingVertical: spacing.sm,
-                  borderColor: c.border,
-                  marginTop: spacing.xs + 2,
-                },
-              ]}
-              onPress={handleOpenOtpQrScanner}
-              accessibilityLabel={t.card_otp_scan}
-            >
-              <Ionicons
-                name="qr-code-outline"
-                size={16}
-                color={c.text}
-                style={{ marginRight: 6 }}
-              />
-              <Text style={[styles.secGhostOutlineText, { color: c.text, fontSize: 13 }]}>
-                {t.card_otp_scan}
+              >
+                {t.card_type_pass}
               </Text>
             </TouchableOpacity>
-          )}
+            <TouchableOpacity
+              style={[
+                styles.pickerCellTabOption,
+                {
+                  borderColor: item.type === 'SECRET_PHRASE' ? c.accent : c.border,
+                  backgroundColor: item.type === 'SECRET_PHRASE' ? selectedFill : 'transparent',
+                  opacity: typeChangeLocked && item.type !== 'SECRET_PHRASE' ? 0.5 : 1,
+                },
+              ]}
+              onPress={() => handleTypeChangeAttempt('SECRET_PHRASE')}
+              disabled={typeChangeLocked && item.type !== 'SECRET_PHRASE'}
+              accessibilityRole="button"
+              accessibilityState={{
+                selected: item.type === 'SECRET_PHRASE',
+                disabled: typeChangeLocked && item.type !== 'SECRET_PHRASE',
+              }}
+              accessibilityLabel={t.card_type_phrase}
+            >
+              <Text
+                style={[
+                  styles.pickerCellText,
+                  {
+                    color: item.type === 'SECRET_PHRASE' ? c.accent : c.textMuted,
+                    textDecorationLine:
+                      typeChangeLocked && item.type !== 'SECRET_PHRASE' ? 'line-through' : 'none',
+                  },
+                ]}
+              >
+                {t.card_type_phrase}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[
+                styles.pickerCellTabOption,
+                {
+                  borderColor: item.type === 'NOTE' ? c.accent : c.border,
+                  backgroundColor: item.type === 'NOTE' ? selectedFill : 'transparent',
+                  opacity: typeChangeLocked && item.type !== 'NOTE' ? 0.5 : 1,
+                },
+              ]}
+              onPress={() => handleTypeChangeAttempt('NOTE')}
+              disabled={typeChangeLocked && item.type !== 'NOTE'}
+              accessibilityRole="button"
+              accessibilityState={{
+                selected: item.type === 'NOTE',
+                disabled: typeChangeLocked && item.type !== 'NOTE',
+              }}
+              accessibilityLabel={t.card_type_note}
+            >
+              <Text
+                style={[
+                  styles.pickerCellText,
+                  {
+                    color: item.type === 'NOTE' ? c.accent : c.textMuted,
+                    textDecorationLine:
+                      typeChangeLocked && item.type !== 'NOTE' ? 'line-through' : 'none',
+                  },
+                ]}
+              >
+                {t.card_type_note}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
-      )}
 
-      {/* Reference Web Destination direction */}
-      <View style={styles.inputFieldBlockGroup}>
-        <Text style={[styles.smallLabelUppercase, { color: c.textMuted }]}>
-          {t.card_link_label}
-        </Text>
-        <View style={styles.relativeInputGroupRowContainer}>
+        {/* Card Name Editable title */}
+        <View style={styles.inputFieldBlockGroup}>
+          <Text style={[styles.smallLabelUppercase, { color: c.textMuted }]}>
+            {t.card_title_label}
+          </Text>
           <TextInput
             style={[
               styles.cardFieldInputStyle,
               {
-                flex: 1,
+                borderColor: c.border,
+                color: c.text,
+                backgroundColor: isDark ? '#1F1F24' : '#F3F4F6',
+                minHeight: 44,
+                textAlignVertical: 'top',
+              },
+            ]}
+            value={item.title}
+            onChangeText={(text) =>
+              onUpdateCardValue(item.id, 'title', clampField(text, CARD_TITLE_MAX).value)
+            }
+            placeholder={t.example_instagram}
+            placeholderTextColor={c.textMuted}
+            multiline
+            scrollEnabled
+            maxLength={CARD_TITLE_MAX}
+          />
+        </View>
+
+        {/* Core Username Login value */}
+        <View style={styles.inputFieldBlockGroup}>
+          <Text style={[styles.smallLabelUppercase, { color: c.textMuted }]}>
+            {t.card_user_label}
+          </Text>
+          <TextInput
+            style={[
+              styles.cardFieldInputStyle,
+              {
                 borderColor: c.border,
                 color: c.text,
                 backgroundColor: isDark ? '#1F1F24' : '#F3F4F6',
               },
             ]}
-            value={item.link}
-            onChangeText={(text) => onUpdateCardValue(item.id, 'link', text)}
-            placeholder={t.placeholder_link_example}
+            value={item.username}
+            onChangeText={(text) =>
+              onUpdateCardValue(item.id, 'username', clampField(text, CARD_USERNAME_MAX).value)
+            }
+            placeholder={t.example_email}
             placeholderTextColor={c.textMuted}
             autoCapitalize="none"
-            autoCorrect={false}
-            keyboardType="url"
-            textContentType="URL"
+            maxLength={CARD_USERNAME_MAX}
           />
-          {item.link.trim() ? (
-            <TouchableOpacity
+          {hasRepLogin && (
+            <View style={styles.tagLineRowFlex}>
+              <View
+                style={[
+                  styles.warningInLineTagFrame,
+                  { borderColor: c.warning, backgroundColor: 'rgba(245, 158, 11, 0.08)' },
+                ]}
+              >
+                <Ionicons name="alert-circle" size={12} color={c.warning} />
+                <Text style={[styles.warningInLineText, { color: c.warning }]}>
+                  {t.tag_duplicated}
+                </Text>
+              </View>
+            </View>
+          )}
+        </View>
+
+        {/* Reference Web Destination direction */}
+        <View style={styles.inputFieldBlockGroup}>
+          <Text style={[styles.smallLabelUppercase, { color: c.textMuted }]}>
+            {t.card_link_label}
+          </Text>
+          <View style={styles.relativeInputGroupRowContainer}>
+            <TextInput
               style={[
-                styles.smallActionButtonRounded,
+                styles.cardFieldInputStyle,
                 {
-                  backgroundColor: isDark ? '#2D2D37' : '#E5E7EB',
-                  marginTop: spacing.xs,
-                  marginLeft: spacing.sm,
-                  marginRight: 0,
+                  flex: 1,
+                  borderColor: c.border,
+                  color: c.text,
+                  backgroundColor: isDark ? '#1F1F24' : '#F3F4F6',
                 },
               ]}
-              onPress={() => handleOpenCardLink(item.link)}
-              disabled={isOpeningLink}
-              accessibilityRole="button"
-              accessibilityLabel={t.go_to_link}
-            >
-              <Ionicons
-                name="open-outline"
-                size={16}
-                color={isOpeningLink ? c.textMuted : c.accent}
-              />
-            </TouchableOpacity>
-          ) : null}
+              value={item.link}
+              onChangeText={(text) => onUpdateCardValue(item.id, 'link', text)}
+              placeholder={t.placeholder_link_example}
+              placeholderTextColor={c.textMuted}
+              autoCapitalize="none"
+              autoCorrect={false}
+              keyboardType="url"
+              textContentType="URL"
+            />
+            {item.link.trim() ? (
+              <TouchableOpacity
+                style={[
+                  styles.smallActionButtonRounded,
+                  {
+                    backgroundColor: isDark ? '#2D2D37' : '#E5E7EB',
+                    marginTop: spacing.xs,
+                    marginLeft: spacing.sm,
+                    marginRight: 0,
+                  },
+                ]}
+                onPress={() => handleOpenCardLink(item.link)}
+                disabled={isOpeningLink}
+                accessibilityRole="button"
+                accessibilityLabel={t.go_to_link}
+              >
+                <Ionicons
+                  name="open-outline"
+                  size={16}
+                  color={isOpeningLink ? c.textMuted : c.accent}
+                />
+              </TouchableOpacity>
+            ) : null}
+          </View>
         </View>
-      </View>
+      </CardEditorSection>
 
-      {/* Description field grows dynamically in height */}
-      <View style={styles.inputFieldBlockGroup}>
-        <Text style={[styles.smallLabelUppercase, { color: c.textMuted }]}>
-          {t.card_notes_label}
-        </Text>
-        <TextInput
-          multiline
-          numberOfLines={3}
-          style={[
-            styles.cardFieldInputStyle,
-            {
-              borderColor: c.border,
-              color: c.text,
-              backgroundColor: isDark ? '#1F1F24' : '#F3F4F6',
-              height: textareaHeights[item.id] || 70,
-              textAlignVertical: 'top',
-              paddingTop: spacing.sm,
-            },
-          ]}
-          value={item.notes}
-          onChangeText={(text) =>
-            onUpdateCardValue(item.id, 'notes', clampField(text, CARD_NOTES_MAX).value)
-          }
-          maxLength={CARD_NOTES_MAX}
-          onContentSizeChange={(e) =>
-            updateTextareaHeight(item.id, e.nativeEvent.contentSize.height)
-          }
-          placeholder={t.placeholder_credentials}
-          placeholderTextColor={c.textMuted}
-        />
-      </View>
+      {item.type !== 'NOTE' ? (
+        <CardEditorSection
+          title={t.card_section_secret}
+          summary={secretSummary}
+          summaryTags={secretTags}
+          expanded={openSections.has('secret')}
+          onPress={() => selectSection('secret')}
+          backgroundColor={c.cardBg}
+          borderColor={c.border}
+          textColor={c.text}
+          mutedColor={c.textMuted}
+          reduceMotion={reduceMotion}
+        >
+          {/* Standard KEY inputs / Secret Phrase / Note */}
+          {item.type === 'PASSWORD' ? (
+            <View style={styles.inputFieldBlockGroup}>
+              <Text style={[styles.smallLabelUppercase, { color: c.textMuted }]}>
+                {t.card_pass_label}
+              </Text>
+              <View style={styles.relativeInputGroupRowContainer}>
+                <TextInput
+                  style={[
+                    styles.cardFieldInputStyle,
+                    {
+                      flex: 1,
+                      paddingRight: 50,
+                      borderColor: c.border,
+                      color: c.text,
+                      backgroundColor: isDark ? '#1F1F24' : '#F3F4F6',
+                    },
+                  ]}
+                  value={item.passwordList[0] || ''}
+                  onChangeText={(text) => onUpdatePasswordListItem(item.id, 0, text)}
+                  secureTextEntry={!revealCopyPassword}
+                  placeholder={t.placeholder_password_mask}
+                  placeholderTextColor={c.textMuted}
+                />
+              </View>
 
-      <CardTagsEditor
-        tags={cardTags}
-        onChangeTags={(tags) => onUpdateCardValue(item.id, 'tags', tags)}
-        label={t.card_tags_label}
-        placeholder={t.card_tags_placeholder}
-        addHint={t.card_tags_add_hint}
-        removeLabel={(name) => t.card_tags_remove.replace('{name}', name)}
+              {/* Verification strength metrics & reuse descriptors underneath password input */}
+              {(strength || hibpEnabled) && (
+                <CardSecretStatusTags
+                  strength={strength}
+                  duplicated={hasRepPass}
+                  card={item}
+                  c={c}
+                  t={t}
+                  hibpEnabled={hibpEnabled}
+                />
+              )}
+
+              {!hibpEnabled && (
+                <Text style={[styles.settingRowMutedSubTextDesc, { color: c.textMuted }]}>
+                  {t.hibp_disabled_hint}
+                </Text>
+              )}
+            </View>
+          ) : item.type === 'SECRET_PHRASE' ? (
+            <View style={styles.inputFieldBlockGroup}>
+              <Text style={[styles.smallLabelUppercase, { color: c.textMuted }]}>
+                {t.card_phrase_inputs}
+              </Text>
+              {item.passwordList.map((word, wIndex) => (
+                <View key={wIndex} style={styles.seedPhraseWordInputBlockRow}>
+                  <Text style={[styles.seedIndexerCountLabel, { color: c.textMuted }]}>
+                    #{wIndex + 1}
+                  </Text>
+                  <TextInput
+                    style={[
+                      styles.cardFieldInputStyle,
+                      {
+                        flex: 1,
+                        marginVertical: spacing.xs,
+                        borderColor: c.border,
+                        color: c.text,
+                        backgroundColor: isDark ? '#1F1F24' : '#F3F4F6',
+                      },
+                    ]}
+                    value={word}
+                    onChangeText={(text) => onUpdatePasswordListItem(item.id, wIndex, text)}
+                    placeholder={`${t.seed_phrase_placeholder} ${wIndex + 1}`}
+                    placeholderTextColor={c.textMuted}
+                    autoFocus={wIndex === item.passwordList.length - 1 && wIndex > 0}
+                  />
+                </View>
+              ))}
+              <TouchableOpacity
+                style={[
+                  styles.secGhostOutlineButton,
+                  {
+                    paddingVertical: spacing.sm,
+                    borderColor: c.border,
+                    marginTop: spacing.xs + 2,
+                  },
+                ]}
+                onPress={() => onAddPasswordListItem(item.id)}
+                accessibilityRole="button"
+                accessibilityLabel={t.add_phrase_word}
+              >
+                <Ionicons
+                  name="add-circle-outline"
+                  size={16}
+                  color={c.accent}
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={[styles.secGhostOutlineText, { color: c.accent, fontSize: 13 }]}>
+                  {t.add_phrase_word}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ) : null}
+        </CardEditorSection>
+      ) : null}
+
+      {item.type === 'PASSWORD' ? (
+        <CardEditorSection
+          title={t.card_section_otp}
+          summary={otpSummary}
+          expanded={openSections.has('otp')}
+          onPress={() => selectSection('otp')}
+          backgroundColor={c.cardBg}
+          borderColor={c.border}
+          textColor={c.text}
+          mutedColor={c.textMuted}
+          reduceMotion={reduceMotion}
+        >
+          <View style={styles.inputFieldBlockGroup}>
+            <Text style={[styles.smallLabelUppercase, { color: c.textMuted }]}>
+              {t.card_otp_secret_label}
+            </Text>
+            <View style={styles.relativeInputGroupRowContainer}>
+              <TextInput
+                style={[
+                  styles.cardFieldInputStyle,
+                  {
+                    flex: 1,
+                    paddingRight: 45,
+                    borderColor: c.border,
+                    color: c.text,
+                    backgroundColor: isDark ? '#1F1F24' : '#F3F4F6',
+                  },
+                ]}
+                value={item.otpSecret ?? ''}
+                onChangeText={handleOtpInput}
+                secureTextEntry={!showOtpSecret}
+                placeholder={t.card_otp_paste_uri}
+                placeholderTextColor={c.textMuted}
+                autoCapitalize="none"
+                autoCorrect={false}
+              />
+              <TouchableOpacity
+                style={styles.absoluteInlineInputIconPositionButton}
+                onPress={() => setShowOtpSecret((v) => !v)}
+                accessibilityRole="button"
+                accessibilityLabel={showOtpSecret ? t.card_otp_hide : t.card_otp_show}
+              >
+                <Ionicons
+                  name={showOtpSecret ? 'eye-off-outline' : 'eye-outline'}
+                  size={16}
+                  color={c.textMuted}
+                />
+              </TouchableOpacity>
+            </View>
+            {item.otpSecret?.trim() ? (
+              <OtpCountdown
+                otpSecret={item.otpSecret}
+                otpAlgorithm={item.otpAlgorithm}
+                otpDigits={item.otpDigits}
+                otpPeriod={item.otpPeriod}
+                isDark={isDark}
+                c={c}
+                t={t}
+                onBiometricCheck={onBiometricCheck}
+                onCopyCode={(code) => handleSecureCopyText(code, t.copy_label_otp)}
+              />
+            ) : null}
+            {qrOpen ? (
+              <OtpQrScannerPanel
+                cardBg={isDark ? '#1F1F24' : '#F3F4F6'}
+                borderColor={c.border}
+                text={c.text}
+                textMuted={c.textMuted}
+                labels={{
+                  title: t.card_otp_scan,
+                  cancel: t.cancel_button,
+                  hint: t.card_otp_paste_uri,
+                  permission: t.migration_camera_permission,
+                }}
+                onClose={handleCloseOtpQrScanner}
+                onInvalidScan={() => {
+                  notifications.toast({
+                    title: t.otp_invalid_uri_title,
+                    message: t.otp_invalid_uri_desc,
+                    variant: 'error',
+                    duration: 5000,
+                  });
+                }}
+                onScan={(parsed) => {
+                  onUpdateCardValue(item.id, 'otpSecret', parsed.secret);
+                  if (parsed.algorithm)
+                    onUpdateCardValue(item.id, 'otpAlgorithm', parsed.algorithm);
+                  if (parsed.digits) onUpdateCardValue(item.id, 'otpDigits', parsed.digits);
+                  if (parsed.period) onUpdateCardValue(item.id, 'otpPeriod', parsed.period);
+                  const detail = [parsed.issuer, parsed.account].filter(Boolean).join(' · ');
+                  notifications.toast({
+                    title: t.otp_scan_success_title,
+                    message: detail || t.otp_scan_success_message,
+                    variant: 'success',
+                    duration: 3000,
+                  });
+                }}
+              />
+            ) : (
+              <TouchableOpacity
+                style={[
+                  styles.secGhostOutlineButton,
+                  {
+                    paddingVertical: spacing.sm,
+                    borderColor: c.border,
+                    marginTop: spacing.xs + 2,
+                  },
+                ]}
+                onPress={handleOpenOtpQrScanner}
+                accessibilityRole="button"
+                accessibilityLabel={t.card_otp_scan}
+              >
+                <Ionicons
+                  name="qr-code-outline"
+                  size={16}
+                  color={c.text}
+                  style={{ marginRight: 6 }}
+                />
+                <Text style={[styles.secGhostOutlineText, { color: c.text, fontSize: 13 }]}>
+                  {t.card_otp_scan}
+                </Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </CardEditorSection>
+      ) : null}
+
+      <CardEditorSection
+        title={t.card_section_notes}
+        summary={notesSummary}
+        expanded={openSections.has('notes')}
+        onPress={() => selectSection('notes')}
+        backgroundColor={c.cardBg}
+        borderColor={c.border}
         textColor={c.text}
         mutedColor={c.textMuted}
-        borderColor={c.border}
-        inputBg={inputBg}
-        accentColor={c.accent}
-      />
-
-      {/* Action buttons list in Card Floor */}
-      <View style={styles.bottomCardActionsGroupLine}>
-        <View style={styles.actionsLineHorizontalContainer}>
-          {/* Copy button */}
-          <TouchableOpacity
+        reduceMotion={reduceMotion}
+      >
+        {/* Description field grows dynamically in height */}
+        <View style={styles.inputFieldBlockGroup}>
+          <Text style={[styles.smallLabelUppercase, { color: c.textMuted }]}>
+            {t.card_notes_label}
+          </Text>
+          <TextInput
+            multiline
+            numberOfLines={3}
             style={[
-              styles.smallActionButtonRounded,
-              { backgroundColor: isDark ? '#2D2D37' : '#E5E7EB' },
+              styles.cardFieldInputStyle,
+              {
+                borderColor: c.border,
+                color: c.text,
+                backgroundColor: isDark ? '#1F1F24' : '#F3F4F6',
+                height: textareaHeights[item.id] || 70,
+                textAlignVertical: 'top',
+                paddingTop: spacing.sm,
+              },
             ]}
-            onPress={handleCopyCard}
-            accessibilityRole="button"
-            accessibilityLabel={t.a11y_copy_secret}
-          >
-            <Ionicons name="copy-outline" size={16} color={c.text} />
-          </TouchableOpacity>
+            value={item.notes}
+            onChangeText={(text) =>
+              onUpdateCardValue(item.id, 'notes', clampField(text, CARD_NOTES_MAX).value)
+            }
+            maxLength={CARD_NOTES_MAX}
+            onContentSizeChange={(e) =>
+              updateTextareaHeight(item.id, e.nativeEvent.contentSize.height)
+            }
+            placeholder={t.placeholder_credentials}
+            placeholderTextColor={c.textMuted}
+          />
+        </View>
 
-          {/* Super secure autogeneration tool */}
-          {item.type === 'PASSWORD' && (
+        <CardTagsEditor
+          tags={cardTags}
+          onChangeTags={(tags) => onUpdateCardValue(item.id, 'tags', tags)}
+          label={t.card_tags_label}
+          placeholder={t.card_tags_placeholder}
+          addHint={t.card_tags_add_hint}
+          removeLabel={(name) => t.card_tags_remove.replace('{name}', name)}
+          textColor={c.text}
+          mutedColor={c.textMuted}
+          borderColor={c.border}
+          inputBg={inputBg}
+          accentColor={c.accent}
+        />
+      </CardEditorSection>
+
+      <View style={[styles.editorFooterCard, { backgroundColor: c.cardBg, borderColor: c.border }]}>
+        {/* Action buttons list in Card Floor */}
+        <View style={[styles.bottomCardActionsGroupLine, { marginTop: 0, paddingTop: 0 }]}>
+          <View style={styles.actionsLineHorizontalContainer}>
+            {/* Copy button */}
             <TouchableOpacity
               style={[
                 styles.smallActionButtonRounded,
-                {
-                  backgroundColor: isDark ? '#2D2D37' : '#E5E7EB',
-                  opacity: canGeneratePassword ? 1 : 0.45,
-                },
+                { backgroundColor: isDark ? '#2D2D37' : '#E5E7EB' },
               ]}
-              onPress={() => handleAutoGenPasswordInCard(item.id)}
+              onPress={handleCopyCard}
               accessibilityRole="button"
-              accessibilityLabel={t.generate_and_replace}
-              accessibilityState={{ disabled: !canGeneratePassword }}
+              accessibilityLabel={t.a11y_copy_secret}
             >
-              <Ionicons
-                name="key-outline"
-                size={16}
-                color={canGeneratePassword ? c.accent : c.textMuted}
-              />
+              <Ionicons name="copy-outline" size={16} color={c.text} />
             </TouchableOpacity>
-          )}
 
-          {/* HIBP check (opt-in) */}
-          {hibpEnabled && item.type === 'PASSWORD' && (
+            {/* Super secure autogeneration tool */}
+            {item.type === 'PASSWORD' && (
+              <TouchableOpacity
+                style={[
+                  styles.smallActionButtonRounded,
+                  {
+                    backgroundColor: isDark ? '#2D2D37' : '#E5E7EB',
+                    opacity: canGeneratePassword ? 1 : 0.45,
+                  },
+                ]}
+                onPress={() => handleAutoGenPasswordInCard(item.id)}
+                accessibilityRole="button"
+                accessibilityLabel={t.generate_and_replace}
+                accessibilityState={{ disabled: !canGeneratePassword }}
+              >
+                <Ionicons
+                  name="key-outline"
+                  size={16}
+                  color={canGeneratePassword ? c.accent : c.textMuted}
+                />
+              </TouchableOpacity>
+            )}
+
+            {/* HIBP check (opt-in) */}
+            {hibpEnabled && item.type === 'PASSWORD' && (
+              <TouchableOpacity
+                style={[
+                  styles.smallActionButtonRounded,
+                  {
+                    backgroundColor: isDark ? '#2D2D37' : '#E5E7EB',
+                    opacity: hibpChecking ? 0.6 : 1,
+                  },
+                ]}
+                onPress={() => onCheckHibp(item.id)}
+                disabled={hibpChecking}
+                accessibilityRole="button"
+                accessibilityLabel={t.hibp_action_label}
+                accessibilityState={{ disabled: hibpChecking }}
+              >
+                {hibpChecking ? (
+                  <ActivityIndicator size="small" color={c.accent} />
+                ) : (
+                  <Ionicons name="shield-checkmark-outline" size={16} color={c.accent} />
+                )}
+              </TouchableOpacity>
+            )}
+
+            {/* Delete card */}
             <TouchableOpacity
               style={[
                 styles.smallActionButtonRounded,
-                {
-                  backgroundColor: isDark ? '#2D2D37' : '#E5E7EB',
-                  opacity: hibpChecking ? 0.6 : 1,
-                },
+                { backgroundColor: isDark ? '#3B1E1E' : '#FED7D7' },
               ]}
-              onPress={() => onCheckHibp(item.id)}
-              disabled={hibpChecking}
+              onPress={() => onDeleteCard(item.id)}
               accessibilityRole="button"
-              accessibilityLabel={t.hibp_action_label}
-              accessibilityState={{ disabled: hibpChecking }}
+              accessibilityLabel={t.card_delete_btn}
             >
-              {hibpChecking ? (
-                <ActivityIndicator size="small" color={c.accent} />
-              ) : (
-                <Ionicons name="shield-checkmark-outline" size={16} color={c.accent} />
-              )}
+              <Ionicons name="trash-outline" size={16} color={c.danger} />
             </TouchableOpacity>
-          )}
+          </View>
 
-          {/* Delete card */}
+          {/* Save operations */}
           <TouchableOpacity
             style={[
-              styles.smallActionButtonRounded,
-              { backgroundColor: isDark ? '#3B1E1E' : '#FED7D7' },
+              styles.saveActionButtonStylePill,
+              {
+                backgroundColor: saveState === 'saved' ? c.accent : c.success,
+                opacity: saveState === 'saving' ? 0.6 : 1,
+              },
             ]}
-            onPress={() => onDeleteCard(item.id)}
+            onPress={handleSaveWithDetection}
+            disabled={saveState !== 'idle'}
             accessibilityRole="button"
-            accessibilityLabel={t.card_delete_btn}
+            accessibilityState={{ disabled: saveState !== 'idle' }}
+            accessibilityLabel={
+              saveState === 'saving'
+                ? t.detecting_icon
+                : saveState === 'saved'
+                  ? t.card_saved_btn
+                  : t.card_save_btn
+            }
           >
-            <Ionicons name="trash-outline" size={16} color={c.danger} />
+            <Ionicons
+              name={
+                saveState === 'saving'
+                  ? 'sync'
+                  : saveState === 'saved'
+                    ? 'checkmark'
+                    : 'checkmark-circle-outline'
+              }
+              size={16}
+              color="#FFFFFF"
+              style={{ marginRight: spacing.xs + 2 }}
+            />
+            <Text style={styles.saveActionTextPill}>
+              {saveState === 'saving'
+                ? t.detecting_icon
+                : saveState === 'saved'
+                  ? t.card_saved_btn
+                  : t.card_save_btn}
+            </Text>
           </TouchableOpacity>
         </View>
 
-        {/* Save operations */}
-        <TouchableOpacity
-          style={[
-            styles.saveActionButtonStylePill,
-            {
-              backgroundColor: saveState === 'saved' ? c.accent : c.success,
-              opacity: saveState === 'saving' ? 0.6 : 1,
-            },
-          ]}
-          onPress={handleSaveWithDetection}
-          disabled={saveState !== 'idle'}
-          accessibilityRole="button"
-          accessibilityState={{ disabled: saveState !== 'idle' }}
-          accessibilityLabel={
-            saveState === 'saving'
-              ? t.detecting_icon
-              : saveState === 'saved'
-                ? t.card_saved_btn
-                : t.card_save_btn
-          }
-        >
-          <Ionicons
-            name={
-              saveState === 'saving'
-                ? 'sync'
-                : saveState === 'saved'
-                  ? 'checkmark'
-                  : 'checkmark-circle-outline'
-            }
-            size={16}
-            color="#FFFFFF"
-            style={{ marginRight: spacing.xs + 2 }}
-          />
-          <Text style={styles.saveActionTextPill}>
-            {saveState === 'saving'
-              ? t.detecting_icon
-              : saveState === 'saved'
-                ? t.card_saved_btn
-                : t.card_save_btn}
+        {/* Storable Timestamp Logs */}
+        <View style={[styles.creationLogLabelRow, { borderTopColor: c.border }]}>
+          <Text style={[styles.metadataFooterCardDate, { color: c.textMuted }]}>
+            {t.created_label}: {new Date(item.creation_date).toLocaleDateString()} |{' '}
+            {t.modified_label}: {new Date(item.last_update).toLocaleDateString()}
           </Text>
-        </TouchableOpacity>
-      </View>
-
-      {/* Storable Timestamp Logs */}
-      <View style={styles.creationLogLabelRow}>
-        <Text style={[styles.metadataFooterCardDate, { color: c.textMuted }]}>
-          {t.created_label}: {new Date(item.creation_date).toLocaleDateString()} |{' '}
-          {t.modified_label}: {new Date(item.last_update).toLocaleDateString()}
-        </Text>
+        </View>
       </View>
     </View>
   );

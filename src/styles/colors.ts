@@ -19,10 +19,27 @@ export interface ThemeColors {
 }
 
 /**
+ * Mix a `#RRGGBB` token with an alpha channel.
+ * Values that are not 6-digit hex are returned unchanged.
+ */
+export function withAlpha(hex: string, alpha: number): string {
+  const raw = hex.replace('#', '');
+  if (!/^[0-9a-fA-F]{6}$/.test(raw)) return hex;
+  const r = parseInt(raw.slice(0, 2), 16);
+  const g = parseInt(raw.slice(2, 4), 16);
+  const b = parseInt(raw.slice(4, 6), 16);
+  const a = Math.min(1, Math.max(0, alpha));
+  return `rgba(${r},${g},${b},${a})`;
+}
+
+/** Wash behind a selected pill. Accent at this alpha stays visible on light and dark cards. */
+export const ACCENT_SELECTED_ALPHA = 0.16;
+
+/**
  * Generates the appropriate color palette based on the user's theme preference.
  *
- * @param {boolean} isDark - Flag indicating if the dark theme is active.
- * @returns {ThemeColors} The localized color palette for the current theme mode.
+ * @param isDark - Flag indicating if the dark theme is active.
+ * @returns The color palette for the current theme mode.
  */
 export const getTheme = (isDark: boolean): ThemeColors => {
   return {

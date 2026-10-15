@@ -20,6 +20,7 @@ import { canDisableGeneratorOption, isGeneratorOptionKey } from '../utils/passwo
 import { notifications } from '../notifications/notificationRef';
 import { normalizeLanguage, normalizeTheme, resolveThemeIsDark } from '@pkey/core';
 import { getTheme, type ThemeColors } from '../styles/colors';
+import { rememberPublicUiFromSettings } from '../utils/publicUiPrefs';
 
 export type SettingsContextData = Readonly<{
   t: LocaleStrings;
@@ -128,6 +129,9 @@ export const SettingsProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         [key]:
           key === 'theme' ? normalizeTheme(val) : key === 'language' ? normalizeLanguage(val) : val,
       };
+      if (key === 'theme' || key === 'language' || key === 'allowScreenshots') {
+        rememberPublicUiFromSettings(nextSettings);
+      }
       write({ ...current, settings: nextSettings, last_update: new Date().toISOString() });
     },
     [dbRef]

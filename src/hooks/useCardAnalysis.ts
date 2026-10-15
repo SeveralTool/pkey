@@ -38,6 +38,13 @@ export type CardAnalysisCopy = Pick<
 >;
 export type CardAnalysisColors = Pick<ThemeColors, 'danger' | 'warning' | 'success'>;
 
+/** `Array.isArray` does not narrow `readonly T[]` out of a union, so guard explicitly. */
+function isCardsArray(
+  value: readonly PasswordCard[] | CardAnalysisOptions
+): value is readonly PasswordCard[] {
+  return Array.isArray(value);
+}
+
 /**
  * Hook that provides utilities for checking repeated passwords, repeated usernames,
  * and evaluating password entropy strength.
@@ -47,7 +54,7 @@ export const useCardAnalysis = (
   t: CardAnalysisCopy,
   c: CardAnalysisColors
 ) => {
-  const options: CardAnalysisOptions = Array.isArray(cardsOrOptions)
+  const options: CardAnalysisOptions = isCardsArray(cardsOrOptions)
     ? { cards: cardsOrOptions }
     : cardsOrOptions;
   const { cards, usernameIndex, passwordIndex } = options;
@@ -131,5 +138,42 @@ export function buildDuplicateIndices(cards: readonly PasswordCard[]): {
     }
   });
 
+  return { usernameIndex, passwordIndex };
+}
+
+function sameIdList(left: readonly string[], right: readonly string[]): boolean {
+  if (left.length !== right.length) return false;
+  if (left.every((id, index) => id === right[index])) return true;
+  const sortedLeft = [...left].sort();
+  const sortedRight = [...right].sort();
+  return sortedLeft.every((id, index) => id === sortedRight[index]);
+}
+
+function sameDuplicateIndex(left: DuplicateIndex, right: DuplicateIndex): boolean {
+  if (left.size !== right.size) return false;
+  for (const [key, ids] of left) {
+    const other = right.get(key);
+    if (!other || !sameIdList(ids, other)) return false;
+  }
+  return true;
+}
+
+/**
+ * Keeps the previous index maps when membership did not change, so a title
+ * edit does not hand every card a new Map.
+ */
+export function retainDuplicateIndices(
+  prev: { usernameIndex: DuplicateIndex; passwordIndex: DuplicateIndex } | null,
+  cards: readonly PasswordCard[]
+): { usernameIndex: DuplicateIndex; passwordIndex: DuplicateIndex } {
+  const next = buildDuplicateIndices(cards);
+  if (!prev) return next;
+  const usernameIndex = sameDuplicateIndex(prev.usernameIndex, next.usernameIndex)
+    ? prev.usernameIndex
+    : next.usernameIndex;
+  const passwordIndex = sameDuplicateIndex(prev.passwordIndex, next.passwordIndex)
+    ? prev.passwordIndex
+    : next.passwordIndex;
+  if (usernameIndex === prev.usernameIndex && passwordIndex === prev.passwordIndex) return prev;
   return { usernameIndex, passwordIndex };
 }

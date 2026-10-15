@@ -31,6 +31,33 @@ class PkeyWebAccessModule : Module() {
       null
     }
 
+    AsyncFunction("startBackupKeepAlive") { title: String, body: String ->
+      val context = appContext.reactContext ?: return@AsyncFunction null
+      val intent = Intent(context, BackupKeepAliveService::class.java).apply {
+        putExtra("title", title)
+        putExtra("body", body)
+      }
+      try {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+          context.startForegroundService(intent)
+        } else {
+          context.startService(intent)
+        }
+      } catch (error: Exception) {
+        // Android 12+ rejects a foreground start once the activity is already stopped.
+        android.util.Log.w("PKEY", "backup keep-alive start rejected", error)
+      }
+      null
+    }
+
+    AsyncFunction("stopBackupKeepAlive") {
+      val context = appContext.reactContext
+      if (context != null) {
+        context.stopService(Intent(context, BackupKeepAliveService::class.java))
+      }
+      null
+    }
+
     AsyncFunction("updateNotification") { body: String ->
       val context = appContext.reactContext ?: return@AsyncFunction null
       val intent = Intent(context, WebAccessForegroundService::class.java).apply {

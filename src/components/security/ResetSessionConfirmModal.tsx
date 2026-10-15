@@ -73,6 +73,9 @@ export const ResetSessionConfirmModal = () => {
         <TouchableOpacity
           onPress={handleClose}
           disabled={busy}
+          accessibilityRole="button"
+          accessibilityLabel={t.cancel_button}
+          accessibilityState={{ disabled: busy }}
           style={{ paddingVertical: 10, paddingHorizontal: 16, opacity: busy ? 0.4 : 1 }}
         >
           <Text style={{ color: c.textMuted, fontWeight: '700' }}>{t.cancel_button}</Text>
@@ -80,6 +83,9 @@ export const ResetSessionConfirmModal = () => {
         <TouchableOpacity
           onPress={handleConfirm}
           disabled={busy}
+          accessibilityRole="button"
+          accessibilityLabel={t.reset_session_btn}
+          accessibilityState={{ disabled: busy }}
           style={{
             backgroundColor: c.danger,
             paddingVertical: 10,

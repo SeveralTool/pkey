@@ -7,9 +7,13 @@ import { canUseNativeOsNotifications } from './osNotificationCapabilities';
 import {
   OS_BLOCK_ACTION_ID,
   OS_DENY_ACTION_ID,
+  OS_SHARE_ACTION_ID,
   OS_WEB_BROWSER_CATEGORY,
   OS_PWA_CONFIRM_CATEGORY,
+  OS_AUTO_BACKUP_CATEGORY,
   intentFromOsResponse,
+  osNotificationResponseKey,
+  shouldDeliverOsNotificationResponse,
   type OsNotificationIntent,
 } from './osNotificationData';
 import { OsNotificationPayload } from './types';
@@ -19,8 +23,19 @@ type ExpoNotificationsModule = typeof import('expo-notifications');
 let notificationsModule: ExpoNotificationsModule | null = null;
 let loadAttempted = false;
 let responseSub: { remove: () => void } | null = null;
-let queuedResponse: { actionIdentifier: string; data: unknown } | null = null;
+let queuedResponse: {
+  actionIdentifier: string;
+  data: unknown;
+  identifier: string | null;
+  date: number | null;
+} | null = null;
 let intentHandler: ((intent: OsNotificationIntent) => void) | null = null;
+let lastDelivered: { key: string; at: number } | null = null;
+
+interface OsResponseMeta {
+  readonly identifier?: string | null;
+  readonly date?: number | null;
+}
 
 const loadNotificationsModule = async (): Promise<ExpoNotificationsModule | null> => {
   if (!canUseNativeOsNotifications()) return null;
@@ -38,20 +53,40 @@ const loadNotificationsModule = async (): Promise<ExpoNotificationsModule | null
   }
 };
 
-const deliverResponse = (actionIdentifier: string, data: unknown): void => {
+const deliverResponse = (actionIdentifier: string, data: unknown, meta?: OsResponseMeta): void => {
+  const key = osNotificationResponseKey(actionIdentifier, data, meta);
+  const now = Date.now();
+  if (!shouldDeliverOsNotificationResponse(lastDelivered, { key, at: now })) return;
+  lastDelivered = { key, at: now };
   const intent = intentFromOsResponse(actionIdentifier, data);
   if (!intent) return;
   if (intentHandler) {
     intentHandler(intent);
     return;
   }
-  queuedResponse = { actionIdentifier, data };
+  queuedResponse = {
+    actionIdentifier,
+    data,
+    identifier: meta?.identifier ?? null,
+    date: meta?.date ?? null,
+  };
 };
+
+const responseMeta = (response: {
+  notification: { date?: number; request: { identifier?: string; content: { data: unknown } } };
+}): OsResponseMeta => ({
+  identifier: response.notification.request.identifier ?? null,
+  date: typeof response.notification.date === 'number' ? response.notification.date : null,
+});
 
 const attachResponseListener = (Notifications: ExpoNotificationsModule): void => {
   if (responseSub) return;
   responseSub = Notifications.addNotificationResponseReceivedListener((response) => {
-    deliverResponse(response.actionIdentifier, response.notification.request.content.data);
+    deliverResponse(
+      response.actionIdentifier,
+      response.notification.request.content.data,
+      responseMeta(response)
+    );
   });
 };
 
@@ -59,7 +94,11 @@ const consumeLastResponse = async (Notifications: ExpoNotificationsModule): Prom
   try {
     const last = await Notifications.getLastNotificationResponseAsync();
     if (!last) return;
-    deliverResponse(last.actionIdentifier, last.notification.request.content.data);
+    deliverResponse(
+      last.actionIdentifier,
+      last.notification.request.content.data,
+      responseMeta(last)
+    );
     const clear = (
       Notifications as ExpoNotificationsModule & {
         clearLastNotificationResponseAsync?: () => Promise<void>;
@@ -79,13 +118,17 @@ export const setOsNotificationIntentHandler = (
   if (handler && queuedResponse) {
     const queued = queuedResponse;
     queuedResponse = null;
-    deliverResponse(queued.actionIdentifier, queued.data);
+    // Already counted in lastDelivered when it was queued. Re-entering
+    // deliverResponse would drop it as a duplicate of the same tap.
+    const intent = intentFromOsResponse(queued.actionIdentifier, queued.data);
+    if (intent) handler(intent);
   }
 };
 
 export const configureOsNotifications = async (
   blockActionTitle?: string,
-  denyActionTitle?: string
+  denyActionTitle?: string,
+  shareActionTitle?: string
 ): Promise<boolean> => {
   const Notifications = await loadNotificationsModule();
   if (!Notifications) return false;
@@ -114,6 +157,7 @@ export const configureOsNotifications = async (
 
     const title = blockActionTitle?.trim() || 'Block';
     const denyTitle = denyActionTitle?.trim() || 'Deny';
+    const shareTitle = shareActionTitle?.trim() || 'Share';
     try {
       await Notifications.setNotificationCategoryAsync(OS_WEB_BROWSER_CATEGORY, [
         {
@@ -135,6 +179,16 @@ export const configureOsNotifications = async (
           },
         },
       ]);
+      await Notifications.setNotificationCategoryAsync(OS_AUTO_BACKUP_CATEGORY, [
+        {
+          identifier: OS_SHARE_ACTION_ID,
+          buttonTitle: shareTitle,
+          options: {
+            opensAppToForeground: true,
+            isDestructive: false,
+          },
+        },
+      ]);
     } catch (error) {
       console.warn('[PKEY] Failed to register OS notification category:', error);
     }
@@ -151,12 +205,17 @@ export const configureOsNotifications = async (
 
 export const ensureOsNotificationPermissions = async (
   blockActionTitle?: string,
-  denyActionTitle?: string
+  denyActionTitle?: string,
+  shareActionTitle?: string
 ): Promise<boolean> => {
   const Notifications = await loadNotificationsModule();
   if (!Notifications) return false;
 
-  const configured = await configureOsNotifications(blockActionTitle, denyActionTitle);
+  const configured = await configureOsNotifications(
+    blockActionTitle,
+    denyActionTitle,
+    shareActionTitle
+  );
   if (!configured) return false;
 
   try {
@@ -198,6 +257,21 @@ export const sendOsNotification = async (payload: OsNotificationPayload): Promis
   if (!hasPermission) return false;
 
   const content = buildOsNotificationContent(payload);
+  // A new alert is a new user action. Do not treat its tap as the previous one.
+  lastDelivered = null;
+
+  if (payload.id) {
+    try {
+      await Notifications.dismissNotificationAsync(payload.id);
+    } catch {
+      // Already gone or unsupported.
+    }
+    try {
+      await Notifications.cancelScheduledNotificationAsync(payload.id);
+    } catch {
+      // Already gone or unsupported.
+    }
+  }
 
   try {
     await Notifications.scheduleNotificationAsync({

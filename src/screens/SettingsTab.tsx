@@ -2,15 +2,7 @@
  * @fileoverview Tab for adjusting global application configurations and parameters.
  */
 import React, { useState } from 'react';
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Switch,
-  Platform,
-  ActivityIndicator,
-} from 'react-native';
+import { View, Text, TouchableOpacity, Switch, Platform, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useCoreState } from '../context/CoreStateContext';
@@ -19,12 +11,16 @@ import { useAuth } from '../context/AuthContext';
 import { useNotifications } from '../context/NotificationContext';
 import { useDatabase } from '../context/DatabaseContext';
 import { globalStyles as styles } from '../styles/globalStyles';
+import { ACCENT_SELECTED_ALPHA, withAlpha } from '../styles/colors';
 import { estimateTabBarScrollPadding } from '../navigation/tabBarInset';
+import { DashboardScrollView } from '../navigation/DashboardScrollView';
+import { FrozenDashboardTab } from '../navigation/FrozenDashboardTab';
 import { SettingsSectionCard } from '../components/common';
 import { HelpInfoButton, HelpProcedureModal } from '../components/help';
 import type { ProcedureId } from '../constants/procedures';
 import { LegalSettingsSection } from '../components/settings/LegalSettingsSection';
 import { BuildIntegritySection } from '../components/settings/BuildIntegritySection';
+import { ListingDemoSection } from '../components/settings/ListingDemoSection';
 import { AppearanceSettingsSection } from '../components/settings/AppearanceSettingsSection';
 import type { AppSettings } from '../types';
 import {
@@ -33,17 +29,61 @@ import {
   GeneratorOptionKey,
   isLastActiveGeneratorOption,
 } from '../utils/passwordGenerator';
+type SegmentOption<T extends string> = { label: string; value: T };
+
 /**
- * Truncates a string to `maxLength` characters and appends an ellipsis.
- *
- * @param text - Source string
- * @param maxLength - Maximum length before truncation (default 5)
- * @returns Truncated string or the original when short enough
+ * Full-label segment pills. The visible text is the accessible name.
  */
-const truncateText = (text: string, maxLength: number = 5): string => {
-  if (text.length <= maxLength) return text;
-  return text.substring(0, maxLength) + '…';
-};
+function SegmentPills<T extends string>({
+  options,
+  selected,
+  onSelect,
+  accent,
+  border,
+  muted,
+}: {
+  options: readonly SegmentOption<T>[];
+  selected: T;
+  onSelect: (value: T) => void;
+  accent: string;
+  border: string;
+  muted: string;
+}): React.JSX.Element {
+  return (
+    <View style={[styles.horizontalPillsSegmentControls, styles.segmentPillsWrap]}>
+      {options.map((option) => {
+        const isSelected = selected === option.value;
+        return (
+          <TouchableOpacity
+            key={option.value}
+            style={[
+              styles.segmentButtonOption,
+              {
+                borderColor: isSelected ? accent : border,
+                backgroundColor: isSelected
+                  ? withAlpha(accent, ACCENT_SELECTED_ALPHA)
+                  : 'transparent',
+              },
+            ]}
+            onPress={() => onSelect(option.value)}
+            accessibilityRole="button"
+            accessibilityState={{ selected: isSelected }}
+            accessibilityLabel={option.label}
+          >
+            <Text
+              style={[
+                styles.segmentOptionTextLabel,
+                { color: isSelected ? accent : muted, fontSize: 10 },
+              ]}
+            >
+              {option.label}
+            </Text>
+          </TouchableOpacity>
+        );
+      })}
+    </View>
+  );
+}
 
 /**
  * Renders interactive UI controls mapped directly to the `db.settings` configuration.
@@ -51,7 +91,7 @@ const truncateText = (text: string, maxLength: number = 5): string => {
  *
  * @returns {JSX.Element} The Settings Tab component.
  */
-export const SettingsTab = () => {
+function SettingsTabContent(): React.JSX.Element {
   const { db } = useCoreState();
   const { c, t, handleToggleSettingsOption } = useSettings();
   const insets = useSafeAreaInsets();
@@ -60,6 +100,21 @@ export const SettingsTab = () => {
   const { handleCheckAllPasswords, handleStopHibpChecks, hibpPendingIds, hibpRunProgress } =
     useDatabase();
   const [helpProcedureId, setHelpProcedureId] = useState<ProcedureId | null>(null);
+
+  // The locale dictionary widens option values to `string`; narrow them to the setting unions.
+  const autoLogoutOptions = (t.settings_buttons_options.auto_logout || []) as readonly {
+    label: string;
+    value: AppSettings['autoLogout'];
+  }[];
+  const foregroundIdleLockOptions = (t.settings_buttons_options.foreground_idle_lock ||
+    []) as readonly {
+    label: string;
+    value: NonNullable<AppSettings['foregroundIdleLock']>;
+  }[];
+  const webAutoLogoutOptions = (t.settings_buttons_options.web_auto_logout || []) as readonly {
+    label: string;
+    value: NonNullable<AppSettings['webAutoLogout']>;
+  }[];
 
   const handleHibpToggle = (val: boolean) => {
     if (!val) {
@@ -135,7 +190,7 @@ export const SettingsTab = () => {
   };
 
   return (
-    <ScrollView
+    <DashboardScrollView
       contentContainerStyle={[
         styles.statsPanelContainerScrollBody,
         { paddingBottom: estimateTabBarScrollPadding(insets.bottom) },
@@ -149,8 +204,8 @@ export const SettingsTab = () => {
         first
         headerRight={<HelpInfoButton onPress={() => setHelpProcedureId('session_lock')} />}
       >
-        <View style={settingRowStyle}>
-          <View style={styles.settingTextGroupingLeftColumn}>
+        <View style={[settingRowStyle, styles.settingSegmentStack]}>
+          <View style={styles.settingSegmentCopy}>
             <Text style={[styles.settingRowLabelBoldTitle, { color: c.text }]}>
               {t.auto_logout}
             </Text>
@@ -158,42 +213,18 @@ export const SettingsTab = () => {
               {t.auto_logout_desc}
             </Text>
           </View>
-          <View style={styles.horizontalPillsSegmentControls}>
-            {(t.settings_buttons_options.auto_logout || []).map(
-              (option: { label: string; value: AppSettings['autoLogout'] }, idx: number) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={[
-                    styles.segmentButtonOption,
-                    {
-                      borderColor: db.settings.autoLogout === option.value ? c.accent : c.border,
-                      backgroundColor:
-                        db.settings.autoLogout === option.value
-                          ? 'rgba(59, 130, 246, 0.1)'
-                          : 'transparent',
-                    },
-                  ]}
-                  onPress={() => handleToggleSettingsOption('autoLogout', option.value)}
-                >
-                  <Text
-                    style={[
-                      styles.segmentOptionTextLabel,
-                      {
-                        color: db.settings.autoLogout === option.value ? c.accent : c.textMuted,
-                        fontSize: 10,
-                      },
-                    ]}
-                  >
-                    {truncateText(option.label, 10)}
-                  </Text>
-                </TouchableOpacity>
-              )
-            )}
-          </View>
+          <SegmentPills
+            options={autoLogoutOptions}
+            selected={db.settings.autoLogout}
+            onSelect={(value) => handleToggleSettingsOption('autoLogout', value)}
+            accent={c.accent}
+            border={c.border}
+            muted={c.textMuted}
+          />
         </View>
 
-        <View style={settingRowStyle}>
-          <View style={styles.settingTextGroupingLeftColumn}>
+        <View style={[settingRowStyle, styles.settingSegmentStack]}>
+          <View style={styles.settingSegmentCopy}>
             <Text style={[styles.settingRowLabelBoldTitle, { color: c.text }]}>
               {t.foreground_idle_lock}
             </Text>
@@ -201,51 +232,18 @@ export const SettingsTab = () => {
               {t.foreground_idle_lock_desc}
             </Text>
           </View>
-          <View style={styles.horizontalPillsSegmentControls}>
-            {(t.settings_buttons_options.foreground_idle_lock || []).map(
-              (
-                option: { label: string; value: NonNullable<AppSettings['foregroundIdleLock']> },
-                idx: number
-              ) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={[
-                    styles.segmentButtonOption,
-                    {
-                      borderColor:
-                        (db.settings.foregroundIdleLock ?? 'NEVER') === option.value
-                          ? c.accent
-                          : c.border,
-                      backgroundColor:
-                        (db.settings.foregroundIdleLock ?? 'NEVER') === option.value
-                          ? 'rgba(59, 130, 246, 0.1)'
-                          : 'transparent',
-                    },
-                  ]}
-                  onPress={() => handleToggleSettingsOption('foregroundIdleLock', option.value)}
-                >
-                  <Text
-                    style={[
-                      styles.segmentOptionTextLabel,
-                      {
-                        color:
-                          (db.settings.foregroundIdleLock ?? 'NEVER') === option.value
-                            ? c.accent
-                            : c.textMuted,
-                        fontSize: 10,
-                      },
-                    ]}
-                  >
-                    {truncateText(option.label, 10)}
-                  </Text>
-                </TouchableOpacity>
-              )
-            )}
-          </View>
+          <SegmentPills
+            options={foregroundIdleLockOptions}
+            selected={db.settings.foregroundIdleLock ?? 'NEVER'}
+            onSelect={(value) => handleToggleSettingsOption('foregroundIdleLock', value)}
+            accent={c.accent}
+            border={c.border}
+            muted={c.textMuted}
+          />
         </View>
 
-        <View style={settingRowStyle}>
-          <View style={styles.settingTextGroupingLeftColumn}>
+        <View style={[settingRowStyle, styles.settingSegmentStack]}>
+          <View style={styles.settingSegmentCopy}>
             <Text style={[styles.settingRowLabelBoldTitle, { color: c.text }]}>
               {t.web_auto_logout}
             </Text>
@@ -253,45 +251,14 @@ export const SettingsTab = () => {
               {t.web_auto_logout_desc}
             </Text>
           </View>
-          <View style={styles.horizontalPillsSegmentControls}>
-            {(t.settings_buttons_options.web_auto_logout || []).map(
-              (
-                option: { label: string; value: NonNullable<AppSettings['webAutoLogout']> },
-                idx: number
-              ) => (
-                <TouchableOpacity
-                  key={idx}
-                  style={[
-                    styles.segmentButtonOption,
-                    {
-                      borderColor:
-                        (db.settings.webAutoLogout ?? '15M') === option.value ? c.accent : c.border,
-                      backgroundColor:
-                        (db.settings.webAutoLogout ?? '15M') === option.value
-                          ? 'rgba(59, 130, 246, 0.1)'
-                          : 'transparent',
-                    },
-                  ]}
-                  onPress={() => handleToggleSettingsOption('webAutoLogout', option.value)}
-                >
-                  <Text
-                    style={[
-                      styles.segmentOptionTextLabel,
-                      {
-                        color:
-                          (db.settings.webAutoLogout ?? '15M') === option.value
-                            ? c.accent
-                            : c.textMuted,
-                        fontSize: 10,
-                      },
-                    ]}
-                  >
-                    {truncateText(option.label, 10)}
-                  </Text>
-                </TouchableOpacity>
-              )
-            )}
-          </View>
+          <SegmentPills
+            options={webAutoLogoutOptions}
+            selected={db.settings.webAutoLogout ?? '15M'}
+            onSelect={(value) => handleToggleSettingsOption('webAutoLogout', value)}
+            accent={c.accent}
+            border={c.border}
+            muted={c.textMuted}
+          />
         </View>
 
         <View style={settingRowStyle}>
@@ -446,7 +413,10 @@ export const SettingsTab = () => {
                     onPress={handleCheckAllPasswords}
                     disabled={hibpPendingIds.length > 0}
                     accessibilityRole="button"
-                    accessibilityLabel={t.hibp_check_all_label}
+                    accessibilityState={{ disabled: hibpPendingIds.length > 0 }}
+                    accessibilityLabel={
+                      hibpPendingIds.length > 0 ? t.hibp_check_now_label : t.hibp_check_all_label
+                    }
                   >
                     {hibpPendingIds.length > 0 ? (
                       <ActivityIndicator size="small" color={c.accent} style={{ marginRight: 8 }} />
@@ -458,10 +428,7 @@ export const SettingsTab = () => {
                         style={{ marginRight: 8 }}
                       />
                     )}
-                    <Text
-                      style={[styles.secGhostOutlineText, { color: c.accent, fontSize: 13 }]}
-                      numberOfLines={1}
-                    >
+                    <Text style={[styles.secGhostOutlineText, { color: c.accent, fontSize: 13 }]}>
                       {hibpPendingIds.length > 0 ? t.hibp_check_now_label : t.hibp_check_all_label}
                     </Text>
                   </TouchableOpacity>
@@ -520,11 +487,16 @@ export const SettingsTab = () => {
                   {
                     borderColor: db.settings.genLength === len ? c.accent : c.border,
                     backgroundColor:
-                      db.settings.genLength === len ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+                      db.settings.genLength === len
+                        ? withAlpha(c.accent, ACCENT_SELECTED_ALPHA)
+                        : 'transparent',
                     minWidth: 32,
                   },
                 ]}
                 onPress={() => handleToggleSettingsOption('genLength', len)}
+                accessibilityRole="button"
+                accessibilityState={{ selected: db.settings.genLength === len }}
+                accessibilityLabel={String(len)}
               >
                 <Text
                   style={[
@@ -544,6 +516,8 @@ export const SettingsTab = () => {
         </Text>
       </SettingsSectionCard>
 
+      <ListingDemoSection />
+
       <BuildIntegritySection />
 
       <LegalSettingsSection />
@@ -552,10 +526,21 @@ export const SettingsTab = () => {
       <TouchableOpacity
         style={[styles.primaryActActionButton, { backgroundColor: c.danger, marginTop: 24 }]}
         onPress={handleLogout}
+        accessibilityRole="button"
+        accessibilityLabel={t.logout_btn}
       >
         <Ionicons name="power" size={18} color="#FFFFFF" style={{ marginRight: 8 }} />
         <Text style={styles.primaryActActionText}>{t.logout_btn}</Text>
       </TouchableOpacity>
-    </ScrollView>
+    </DashboardScrollView>
   );
-};
+}
+
+/** Settings tab. React renders suspend while another dashboard tab is focused. */
+export function SettingsTab(): React.JSX.Element {
+  return (
+    <FrozenDashboardTab>
+      <SettingsTabContent />
+    </FrozenDashboardTab>
+  );
+}

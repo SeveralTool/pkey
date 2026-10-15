@@ -22,9 +22,15 @@ import { applyDeletion, applyDeleteAllCards } from '../utils/dbMerge';
 import { clearIconCache, invalidateIconCacheFor } from '../services/iconDetection';
 import { persistUnlockCredentials } from '../services/biometrics';
 import { notifications } from '../notifications/notificationRef';
-import { decryptVaultPayload, isNativeKdfUnavailableError } from '../services/nativeVault';
+import {
+  decryptVaultPayload,
+  isDeviceSecretRequiredError,
+  isNativeKdfUnavailableError,
+} from '../services/nativeVault';
+import { parseRecoveryKit, restoreDeviceSecret } from '../services/deviceSecret';
 import { exportSessionRootKeyHex } from '../services/sessionKey';
-import { commitVault, hydrateVaultSecrets, getVaultSecretStore } from '../services/vaultSecrets';
+import { hydrateVaultSecrets, getVaultSecretStore } from '../services/vaultSecrets';
+import { stageVault } from '../services/vaultPersistence';
 import {
   normalizeTags,
   CARD_TITLE_MAX,
@@ -34,6 +40,8 @@ import {
   canonicalizePublicSessionId,
   canChangeCardType,
   isPersistedCardTypeFrozen,
+  buildListingDemoCards,
+  canReplaceWithListingDemo,
 } from '@pkey/core';
 import { yieldToUi } from '../utils/yieldToUi';
 import { enrichImportedCardsWithIcons } from '../services/importIcons';
@@ -55,8 +63,9 @@ import type { HibpRunProgress } from '../services/hibpOrchestrator';
 import type { HibpCheckResult } from '../types';
 
 export type DatabaseContextData = Readonly<{
-  writeDatabaseToDisk: (newDb: EncryptedDatabase, immediate?: boolean) => Promise<void>;
-  flushPendingWrite: () => Promise<void>;
+  /** Resolves `false` only when an immediate write failed (UI already restored + alerted). */
+  writeDatabaseToDisk: (newDb: EncryptedDatabase, immediate?: boolean) => Promise<boolean>;
+  flushPendingWrite: () => Promise<boolean>;
   handleImportLocalBackup: () => Promise<void>;
   handleImportExternalCards: (cards: readonly PasswordCard[]) => Promise<void>;
   handleCreateNewCard: () => Promise<void>;
@@ -77,6 +86,11 @@ export type DatabaseContextData = Readonly<{
   handleDeleteCard: (cardId: string) => void;
   handleDeleteAllCards: () => void;
   executeDeleteAllCards: (cardCount: number) => Promise<void>;
+  /**
+   * Replaces an empty vault (or one already tagged `demo`) with Play listing
+   * fiction. Enables screenshots. Refuses if any real card is present.
+   */
+  executeSeedListingDemo: () => Promise<void>;
   /** Explicitly checks one card's password against HIBP (opt-in action). */
   handleCheckCardPassword: (cardId: string) => void;
   /** Explicitly checks every PASSWORD card without a current result (opt-in action). */
@@ -176,7 +190,6 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const { writeDatabaseToDisk, flushWriteDatabaseToDisk, lastPersistedDbRef } =
     useDebouncedVaultWrite({
       isLogged,
-      db,
       masterPassword,
       setDb,
       getT,
@@ -386,6 +399,99 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       const decodedString = await pickBackupFile();
       if (!decodedString) return;
 
+      /** Decrypts with the typed password (and, on retry, the recovery kit); `false` = wrong key. */
+      const importWithPassword = async (
+        enteredKey: string,
+        deviceSecretHex?: string
+      ): Promise<boolean> => {
+        const decryptedTry = await decryptVaultPayload(
+          enteredKey,
+          decodedString,
+          deviceSecretHex ? { deviceSecretHex } : undefined
+        );
+        const testDb = decryptedTry ? parseEncryptedDatabaseJson(decryptedTry) : null;
+        if (!testDb || !testDb.version) return false;
+
+        const normalizedDb = {
+          ...testDb,
+          settings: normalizeAppSettings(testDb.settings, testDb.cards),
+          cards: normalizeCards(testDb.cards),
+        };
+
+        const rootKeyHex = await exportSessionRootKeyHex();
+        if (!rootKeyHex || !normalizedDb.salt) {
+          throw new Error('session-root-missing');
+        }
+        // Never pass the master password itself — see biometrics.ts audit note (C2).
+        await persistUnlockCredentials(rootKeyHex, normalizedDb.salt, normalizedDb.passwordHash);
+        await writeDatabaseToDisk(normalizedDb, true);
+        setDb(hydrateVaultSecrets(normalizedDb));
+        lastPersistedDbRef.current = normalizedDb;
+        setMasterPassword('');
+        setHasSession(true);
+        setIsLogged(true);
+        setCustomPromptInput('');
+        setCustomPrompt((prev) => ({ ...prev, visible: false }));
+        notifications.alert({
+          title: t.alert_success_title,
+          message: t.import_success,
+          variant: 'success',
+        });
+        return true;
+      };
+
+      /**
+       * The `.pkey` is `deviceBound` to a secret this phone does not hold (it
+       * came from another device). Ask for the recovery kit, retry, and seal
+       * the secret into local hardware so later unlocks do not need the kit.
+       */
+      const promptRecoveryKitForImport = (enteredKey: string) => {
+        setCustomPromptInput('');
+        setCustomPrompt({
+          visible: true,
+          title: t.device_secret_kit_prompt_title,
+          message: t.device_secret_kit_prompt_body,
+          secure: false,
+          placeholder: t.device_secret_kit_placeholder,
+          busyMessage: t.import_pkey_decrypting,
+          error: undefined,
+          onConfirm: async (kitInput: string) => {
+            const secretHex = parseRecoveryKit(kitInput || '');
+            if (!secretHex) {
+              setCustomPrompt((prev) => ({ ...prev, error: t.device_secret_kit_invalid }));
+              return;
+            }
+            setAuthBusy(true);
+            await yieldToUi();
+            try {
+              const ok = await importWithPassword(enteredKey, secretHex);
+              if (!ok) {
+                setCustomPrompt((prev) => ({ ...prev, error: t.device_secret_kit_wrong }));
+                return;
+              }
+              const restored = await restoreDeviceSecret(secretHex, t.require_auth_device_secret);
+              notifications.toast({
+                title: t.device_secret_title,
+                message: restored
+                  ? t.device_secret_kit_restored
+                  : t.device_secret_kit_restore_failed,
+                variant: restored ? 'success' : 'warning',
+              });
+            } catch (importErr) {
+              console.warn('[DatabaseContext] import with recovery kit failed:', importErr);
+              setCustomPrompt((prev) => ({
+                ...prev,
+                error: isNativeKdfUnavailableError(importErr)
+                  ? t.auth_native_kdf_unavailable
+                  : t.device_secret_kit_wrong,
+              }));
+            } finally {
+              setAuthBusy(false);
+            }
+          },
+        });
+      };
+
       setCustomPromptInput('');
       setCustomPrompt({
         visible: true,
@@ -402,43 +508,15 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
           setAuthBusy(true);
           await yieldToUi();
           try {
-            const decryptedTry = await decryptVaultPayload(enteredKey, decodedString);
-            const testDb = decryptedTry ? parseEncryptedDatabaseJson(decryptedTry) : null;
-
-            if (testDb && testDb.version) {
-              const normalizedDb = {
-                ...testDb,
-                settings: normalizeAppSettings(testDb.settings, testDb.cards),
-                cards: normalizeCards(testDb.cards),
-              };
-
-              const rootKeyHex = await exportSessionRootKeyHex();
-              if (!rootKeyHex || !normalizedDb.salt) {
-                throw new Error('session-root-missing');
-              }
-              // Never pass the master password itself — see biometrics.ts audit note (C2).
-              await persistUnlockCredentials(
-                rootKeyHex,
-                normalizedDb.salt,
-                normalizedDb.passwordHash
-              );
-              await writeDatabaseToDisk(normalizedDb, true);
-              setDb(hydrateVaultSecrets(normalizedDb));
-              lastPersistedDbRef.current = normalizedDb;
-              setMasterPassword('');
-              setHasSession(true);
-              setIsLogged(true);
-              setCustomPromptInput('');
-              setCustomPrompt((prev: { visible: boolean }) => ({ ...prev, visible: false }));
-              notifications.alert({
-                title: t.alert_success_title,
-                message: t.import_success,
-                variant: 'success',
-              });
-            } else {
+            const ok = await importWithPassword(enteredKey);
+            if (!ok) {
               setCustomPrompt((prev) => ({ ...prev, error: t.wrong_key_p }));
             }
           } catch (importErr) {
+            if (isDeviceSecretRequiredError(importErr)) {
+              promptRecoveryKitForImport(enteredKey);
+              return;
+            }
             console.warn('[DatabaseContext] import backup failed:', importErr);
             setCustomPrompt((prev) => ({
               ...prev,
@@ -574,7 +652,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
             : value;
         return { ...card, [field]: next, last_update: new Date().toISOString() };
       });
-      setDb(commitVault({ ...currentDb, cards: updatedCards }).ui);
+      setDb(stageVault({ ...currentDb, cards: updatedCards }).ui);
     },
     [dbRef, persistedCard, setDb]
   );
@@ -596,7 +674,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
         return card;
       });
-      setDb(commitVault({ ...currentDb, cards: updatedCards }).ui);
+      setDb(stageVault({ ...currentDb, cards: updatedCards }).ui);
     },
     [dbRef, setDb]
   );
@@ -616,7 +694,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         }
         return card;
       });
-      setDb(commitVault({ ...currentDb, cards: updatedCards }).ui);
+      setDb(stageVault({ ...currentDb, cards: updatedCards }).ui);
     },
     [dbRef, setDb]
   );
@@ -817,6 +895,51 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     [getT, dbRef, writeDatabaseToDisk, setExpandedCardId, setDeleteAllConfirmCount]
   );
 
+  const executeSeedListingDemo = useCallback(async () => {
+    const t = getT();
+    const currentDb = dbRef.current;
+    if (!canReplaceWithListingDemo(currentDb.cards ?? [])) {
+      notifications.alert({
+        title: t.listing_demo_blocked_title,
+        message: t.listing_demo_blocked_message,
+        variant: 'warning',
+      });
+      return;
+    }
+    try {
+      await yieldToUi();
+      const wiped = applyDeleteAllCards(currentDb);
+      const now = new Date();
+      const cards = buildListingDemoCards({
+        now,
+        nextId: () => generateSecureId(),
+      });
+      const updatedDb = {
+        ...wiped,
+        cards: normalizeCards(cards),
+        settings: { ...wiped.settings, allowScreenshots: true },
+        last_update: now.toISOString(),
+      };
+      await writeDatabaseToDisk(updatedDb, true);
+      clearIconCache();
+      if (expandedCardIdRef.current) setExpandedCardId(null);
+      notifications.toast({
+        title: t.listing_demo_success_title,
+        message: t.listing_demo_success_toast.replace('{n}', String(cards.length)),
+        variant: 'success',
+        duration: 5000,
+      });
+    } catch (err) {
+      console.error('[DatabaseContext] listing demo seed failed:', err);
+      notifications.alert({
+        title: t.alert_error_title,
+        message: t.listing_demo_error,
+        variant: 'error',
+      });
+      throw err;
+    }
+  }, [getT, dbRef, writeDatabaseToDisk, setExpandedCardId]);
+
   const value = useMemo(
     () => ({
       writeDatabaseToDisk,
@@ -833,6 +956,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       handleDeleteCard,
       handleDeleteAllCards,
       executeDeleteAllCards,
+      executeSeedListingDemo,
       handleCheckCardPassword,
       handleCheckAllPasswords,
       handleStopHibpChecks,
@@ -854,6 +978,7 @@ export const DatabaseProvider: React.FC<{ children: React.ReactNode }> = ({ chil
       handleDeleteCard,
       handleDeleteAllCards,
       executeDeleteAllCards,
+      executeSeedListingDemo,
       handleCheckCardPassword,
       handleCheckAllPasswords,
       handleStopHibpChecks,

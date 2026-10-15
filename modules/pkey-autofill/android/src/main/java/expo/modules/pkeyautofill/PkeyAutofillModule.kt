@@ -18,8 +18,9 @@ class PkeyAutofillModule : Module() {
     }
 
     AsyncFunction("clearCache") {
-      val context = appContext.reactContext ?: return@AsyncFunction null
-      AutofillCache.wipeSession(context)
+      val context = appContext.reactContext
+      if (context != null) AutofillCache.wipeSession(context)
+      else AutofillCache.wipeRememberedSession()
       null
     }
 

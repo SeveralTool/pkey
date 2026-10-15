@@ -7,6 +7,7 @@ import type { AppSettings } from '../types';
 import {
   isAutoLogoutSuppressed,
   isExternalUiSession,
+  isPwaResponseHold,
   setBackgroundLockHandler,
 } from '../utils/autoLogoutGuard';
 import { isAndroidWebAccessKeepAlive } from '../utils/webAccessLock';
@@ -33,6 +34,8 @@ export interface UseBackgroundAutoLogoutParams {
  * wall-clock timestamp on `background` only; resume compares elapsed real time
  * because JS timers freeze in the background. Android web-access keep-alive
  * skips this background lock so locking the phone does not tear down `:7392`.
+ * A live PWA unlock / action-confirm also skips it: locking would drop the
+ * in-memory grant and the notification the user is answering would expire.
  *
  * @param params.isLogged - Whether the vault is currently unlocked
  * @param params.autoLogout - User setting; `NEVER` installs no listener
@@ -68,6 +71,8 @@ export function useBackgroundAutoLogout({
       if (AppState.currentState === 'active') return;
       // Android + web access: phone lock / Home must keep the FG LAN server.
       if (isAndroidWebAccessKeepAlive()) return;
+      // Answering a PWA notification must not wipe the in-memory grant.
+      if (isPwaResponseHold()) return;
       if (setting === 'INSTANT') {
         // Already locking now — do not also lock again on the queued `active`.
         backgroundedAtRef.current = null;
@@ -79,6 +84,7 @@ export function useBackgroundAutoLogout({
         backgroundedAtRef.current = Date.now();
         logoutTimerRef.current = setTimeout(() => {
           if (isAndroidWebAccessKeepAlive()) return;
+          if (isPwaResponseHold()) return;
           if (AppState.currentState !== 'active') onLogoutRef.current();
         }, AUTO_LOGOUT_1M_MS);
       }
@@ -89,7 +95,10 @@ export function useBackgroundAutoLogout({
     const handleAppStateChange = (next: AppStateStatus): void => {
       if (next === 'active') {
         const skipResumeLock =
-          isAutoLogoutSuppressed() || isExternalUiSession() || isAndroidWebAccessKeepAlive();
+          isAutoLogoutSuppressed() ||
+          isExternalUiSession() ||
+          isAndroidWebAccessKeepAlive() ||
+          isPwaResponseHold();
         const shouldLock =
           !skipResumeLock &&
           shouldLockOnForegroundResume({
@@ -104,6 +113,7 @@ export function useBackgroundAutoLogout({
 
       if (isAutoLogoutSuppressed()) return;
       if (isAndroidWebAccessKeepAlive()) return;
+      if (isPwaResponseHold()) return;
 
       // System sheets, Face ID, Control Center: do not lock here. INSTANT only
       // stamps the leave so a Home/switch that never hits `background` still
@@ -128,6 +138,7 @@ export function useBackgroundAutoLogout({
           backgroundedAtRef.current = Date.now();
           logoutTimerRef.current = setTimeout(() => {
             if (isAndroidWebAccessKeepAlive()) return;
+            if (isPwaResponseHold()) return;
             if (AppState.currentState !== 'active') onLogoutRef.current();
           }, AUTO_LOGOUT_1M_MS);
         }

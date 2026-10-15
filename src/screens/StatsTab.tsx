@@ -2,12 +2,12 @@
  * @fileoverview Tab for displaying security metrics and session analytics.
  */
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
-import { View, Text, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { formatVaultSessionRef } from '@pkey/core';
 import { useCoreState, type CardsListFilterKind } from '../context/CoreStateContext';
-import { useUI, useUISearch } from '../context/UIContext';
+import { useSetDashboardTab, useUI, useUISearch } from '../context/UIContext';
 import { useSettings } from '../context/SettingsContext';
 import { useAuth } from '../context/AuthContext';
 import { useSync } from '../context/SyncContext';
@@ -21,6 +21,8 @@ import {
 import type { UnlockEvent, UnlockMethod } from '../services/unlockHistory';
 import { globalStyles as styles } from '../styles/globalStyles';
 import { estimateTabBarScrollPadding } from '../navigation/tabBarInset';
+import { DashboardScrollView } from '../navigation/DashboardScrollView';
+import { FrozenDashboardTab } from '../navigation/FrozenDashboardTab';
 import { HelpInfoButton, HelpProcedureModal } from '../components/help';
 import { SettingsSectionCard } from '../components/common';
 import type { ProcedureId } from '../constants/procedures';
@@ -191,9 +193,10 @@ function StatsSection({
  *
  * @returns {JSX.Element} The Stats Tab component.
  */
-export const StatsTab = () => {
+function StatsTabContent(): React.JSX.Element {
   const { db, biometricsAvailable } = useCoreState();
-  const { setCurrentTab, setExpandedCardId, setCardsFilter } = useUI();
+  const setCurrentTab = useSetDashboardTab();
+  const { setExpandedCardId, setCardsFilter } = useUI();
   const { setSearchQuery } = useUISearch();
   const { c, t } = useSettings();
   const insets = useSafeAreaInsets();
@@ -299,7 +302,7 @@ export const StatsTab = () => {
   };
 
   return (
-    <ScrollView
+    <DashboardScrollView
       contentContainerStyle={[
         styles.statsPanelContainerScrollBody,
         { paddingBottom: estimateTabBarScrollPadding(insets.bottom) },
@@ -615,6 +618,15 @@ export const StatsTab = () => {
           />
         </View>
       </StatsSection>
-    </ScrollView>
+    </DashboardScrollView>
   );
-};
+}
+
+/** Stats tab. React renders suspend while another dashboard tab is focused. */
+export function StatsTab(): React.JSX.Element {
+  return (
+    <FrozenDashboardTab>
+      <StatsTabContent />
+    </FrozenDashboardTab>
+  );
+}

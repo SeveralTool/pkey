@@ -1,5 +1,6 @@
 import { InteractionManager } from 'react-native';
 import { renderHook, waitFor } from '@testing-library/react-native';
+import { DEFAULT_VAULT_SETTINGS } from '@pkey/core';
 import { useStatistics } from './useStatistics';
 import { hydrateVaultSecrets, clearVaultSecrets } from '../services/vaultSecrets';
 import type { EncryptedDatabase, PasswordCard } from '../types';
@@ -31,14 +32,14 @@ function sampleDb(cards: PasswordCard[]): EncryptedDatabase {
     last_update: '2026-01-01T00:00:00.000Z',
     passwordHash: 'verifier',
     cards,
-    settings: { autoLogout: '1M', theme: 'DARK', language: 'ESP' },
+    settings: { ...DEFAULT_VAULT_SETTINGS, autoLogout: '1M', theme: 'DARK', language: 'ESP' },
   };
 }
 
 beforeEach(() => {
   clearVaultSecrets();
-  jest.spyOn(InteractionManager, 'runAfterInteractions').mockImplementation((cb: () => void) => {
-    cb();
+  jest.spyOn(InteractionManager, 'runAfterInteractions').mockImplementation((task) => {
+    if (typeof task === 'function') task();
     return { cancel: jest.fn() } as never;
   });
 });
@@ -76,9 +77,10 @@ describe('useStatistics', () => {
     const ui = hydrateVaultSecrets(
       sampleDb([card({ id: 'a', passwordList: ['unique-strong-password-XYZ'] })])
     );
-    const { result, rerender } = renderHook(({ cards }) => useStatistics(cards, []), {
-      initialProps: { cards: ui.cards },
-    });
+    const { result, rerender } = renderHook(
+      ({ cards }: { cards: typeof ui.cards }) => useStatistics(cards, []),
+      { initialProps: { cards: ui.cards } }
+    );
     await waitFor(() => expect(result.current.statsReady).toBe(true));
 
     const scheduled = InteractionManager.runAfterInteractions as jest.Mock;

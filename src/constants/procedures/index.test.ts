@@ -31,4 +31,12 @@ describe('help procedures', () => {
       expect(getProcedure('device_migration', lang).body).toMatch(kit);
     }
   });
+
+  it('documents opt-in automatic backup in backup_export without mermaid', () => {
+    for (const lang of ['ESP', 'ING'] as const) {
+      const body = getProcedure('backup_export', lang).body;
+      expect(body).toMatch(/autom[aá]tic/i);
+      expect(body).not.toMatch(/```mermaid/);
+    }
+  });
 });

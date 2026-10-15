@@ -2,7 +2,11 @@
  * @fileoverview Optional 128-bit device secret + Crockford recovery kit (audit H4).
  */
 import vaultKeys, { isPkeyVaultKeysAvailable } from 'pkey-vault-keys';
-import { encodeCrockfordBase32, decodeCrockfordBase32, formatPairingCode } from './migrationChannelCrypto';
+import {
+  encodeCrockfordBase32,
+  decodeCrockfordBase32,
+  formatPairingCode,
+} from './migrationChannelCrypto';
 import { getSecureRandomHex } from '../utils/secureRandom';
 import { hkdfExpand, HKDF_INFO_DEVICE_BIND } from '@pkey/core';
 
@@ -38,6 +42,34 @@ export class DeviceSecretCanceledError extends Error {
     super('canceled');
     this.name = 'DeviceSecretCanceledError';
   }
+}
+
+/** Why the local device secret could not be used to open a `deviceBound` vault. */
+export type DeviceSecretRequiredReason = 'missing' | 'unavailable';
+
+/**
+ * The vault is `deviceBound` but this phone cannot supply the secret: it was
+ * never enabled here (file copied from another device, fresh install after a
+ * migration) or the hardware item is unreadable (biometric enrollment changed
+ * on an older build). The caller must ask for the recovery kit and retry with
+ * `deviceSecretHex`. Not a wrong-password signal: do not count it as a failure.
+ */
+export class DeviceSecretRequiredError extends Error {
+  readonly code = 'E_DEVICE_SECRET_REQUIRED' as const;
+  readonly reason: DeviceSecretRequiredReason;
+
+  constructor(reason: DeviceSecretRequiredReason) {
+    super(`device secret ${reason}`);
+    this.name = 'DeviceSecretRequiredError';
+    this.reason = reason;
+  }
+}
+
+export function isDeviceSecretRequiredError(err: unknown): err is DeviceSecretRequiredError {
+  if (err instanceof DeviceSecretRequiredError) return true;
+  if (!err || typeof err !== 'object') return false;
+  const rec = err as { code?: unknown; name?: unknown };
+  return rec.code === 'E_DEVICE_SECRET_REQUIRED' || rec.name === 'DeviceSecretRequiredError';
 }
 
 const CANCELED_AUTH_CODES = new Set([
@@ -99,4 +131,47 @@ export async function mixDeviceSecret(
   const secret = await vaultKeys.loadDeviceSecret(prompt);
   if (!secret) return null;
   return mixRootWithSecret(argon2RootHex, secret);
+}
+
+/**
+ * Mixes the Argon2 root for a `deviceBound` envelope.
+ *
+ * - With `deviceSecretHex` (typed recovery kit) the local hardware is not consulted.
+ * - Otherwise reads the local secret; `null` → {@link DeviceSecretRequiredError}
+ *   (`missing`), a non-cancel read failure → `unavailable`. A cancelled biometric
+ *   prompt rethrows unchanged so the caller treats it like a dismissed unlock.
+ */
+export async function mixDeviceSecretOrRequire(
+  argon2RootHex: string,
+  prompt: string,
+  deviceSecretHex?: string
+): Promise<string> {
+  if (deviceSecretHex) return mixRootWithSecret(argon2RootHex, deviceSecretHex);
+  let mixed: string | null;
+  try {
+    mixed = await mixDeviceSecret(argon2RootHex, prompt);
+  } catch (err) {
+    if (isUserCanceledAuth(err)) throw err;
+    console.warn('[deviceSecret] local secret unreadable', err);
+    throw new DeviceSecretRequiredError('unavailable');
+  }
+  if (!mixed) throw new DeviceSecretRequiredError('missing');
+  return mixed;
+}
+
+/**
+ * Seals a recovery-kit secret back into local hardware after it opened the
+ * vault, so the next unlock no longer needs the kit. Android shows one
+ * biometric prompt; iOS is silent. Returns `false` when the module is missing,
+ * the user cancelled, or the store failed (the vault stays open either way).
+ */
+export async function restoreDeviceSecret(secretHex: string, prompt: string): Promise<boolean> {
+  if (!isPkeyVaultKeysAvailable() || !vaultKeys) return false;
+  try {
+    await vaultKeys.storeDeviceSecret(secretHex, prompt);
+    return true;
+  } catch (err) {
+    if (!isUserCanceledAuth(err)) console.warn('[deviceSecret] restore failed', err);
+    return false;
+  }
 }

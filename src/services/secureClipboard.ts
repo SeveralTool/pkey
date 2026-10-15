@@ -23,6 +23,13 @@ import * as Clipboard from 'expo-clipboard';
 /** Default auto-clear window. Chosen to match Bitwarden / 1Password defaults. */
 export const CLIPBOARD_CLEAR_MS = 30_000;
 
+/**
+ * Write options for secret values. `sensitive` is not part of expo-clipboard 56's
+ * `SetStringOptions`; the native module ignores unknown keys today, and a future
+ * release that maps it to Android 13's `EXTRA_IS_SENSITIVE` picks it up automatically.
+ */
+const SENSITIVE_WRITE: Clipboard.SetStringOptions & { sensitive: boolean } = { sensitive: true };
+
 /** Options accepted by {@link copySecret}. */
 export interface CopySecretOptions {
   /** Override auto-clear delay (ms). Defaults to {@link CLIPBOARD_CLEAR_MS}. */
@@ -60,8 +67,7 @@ export async function copySecret(value: string, options: CopySecretOptions = {})
   // Cancel any previous timer so a fresh copy resets the clear window.
   cancelPendingClear();
 
-  // `sensitive: true` opts into Android 13+ system-UI hiding (Chip preview / IME).
-  await Clipboard.setStringAsync(trimmed, { sensitive: true });
+  await Clipboard.setStringAsync(trimmed, SENSITIVE_WRITE);
   lastWrittenValue = trimmed;
 
   options.onCopied?.(delayMs);
@@ -75,7 +81,7 @@ export async function copySecret(value: string, options: CopySecretOptions = {})
           // User already replaced the clipboard — leave their content alone.
           return;
         }
-        await Clipboard.setStringAsync('', { sensitive: true });
+        await Clipboard.setStringAsync('', SENSITIVE_WRITE);
         lastWrittenValue = null;
         options.onCleared?.();
       } catch {
@@ -105,7 +111,7 @@ export async function flushSecureClipboard(): Promise<void> {
   try {
     const current = await Clipboard.getStringAsync();
     if (current && current === lastWrittenValue) {
-      await Clipboard.setStringAsync('', { sensitive: true });
+      await Clipboard.setStringAsync('', SENSITIVE_WRITE);
     }
   } catch {
     /* ignore */

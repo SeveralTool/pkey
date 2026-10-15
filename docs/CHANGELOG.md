@@ -7,6 +7,18 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [Unreleased]
 
 ### Fixed
+- Android autofill keeps the session across the system unbind that happens before the user confirms, cancels an in-flight biometric prompt on lock instead of filling an empty password, and still wipes the cache when the React context is already gone
+- Swiping PKEY away stops the Android web-access notification. A killed process no longer restarts that service without the JS server
+- Device-bound vaults without a local secret now ask for the recovery kit on login/import and re-seal it into hardware (`DeviceSecretRequiredError`)
+- Enabling or disabling the device secret writes the vault first and rolls the session back if that write fails
+- `replaceUnlockCredentials` keeps the biometric bundle on Keystore/Keychain instead of silently falling back to SecureStore
+- Headless auto-backup flushes a pending vault write and rejects a truncated envelope before copying a snapshot
+- Android 1-minute auto-backup keeps copying after leaving PKEY (silent foreground service) instead of waiting until the app is opened again
+- Vault file writes are atomic (`.tmp` + `moveAsync`) so a crash mid-save cannot leave a half-written `.pkey`
+- Device-migration TLS pinning awaits `getPeerCertificate()` and hashes a 32-hex SHA-256, instead of hashing a Promise
+- PWA `vault_fork` / `replaceVault` is single-shot: the source cannot replace the vault again after the first success
+- Android 13+ hides the Wi-Fi SSID reveal (location is capped at API 32; the OS redacts `WifiInfo.getSSID()` without it)
+- Switching dashboard tabs parks an in-flight fling, so the list offset does not jump ahead when you return
 - Android XChaCha uses a real HChaCha20 (never `ChaChaEngine` + 16-byte IV); KDF and AEAD KATs are independent so an XChaCha failure cannot disable Argon2id
 - Password unlock no longer re-runs Argon2id in JavaScript after a native derive (or after a failed native open); production never falls back to JS 64 MiB
 - Tapping a native OS notification no longer crashes the in-app overlay (`cardBg` of undefined); overlay errors are isolated from the vault UI
@@ -17,6 +29,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Instant app auto-lock also locks on resume if the OS only sent `inactive` (quick Home/switch); share sheets, Face ID, and permission overlays still do not lock
 
 ### Security
+- Device migration aborts when the TLS peer certificate is missing or does not match the declared fingerprint. The wipe on port 7394 pins the sender certificate from the encrypted auth body. A staged 16-character pairing secret is not reused
+- Logout after migration drops the session root key, SecretStore, autofill, clipboard, and LAN web access. Reset and sender wipe suspend an in-flight automatic backup so it cannot announce a copy of a vault that was just deleted
+- A compromised device no longer receives a new fast-unlock bundle in SecureStore. Logout still keeps an existing bundle; reset and migration delete it
+- Enabling the device secret no longer deletes that secret after the mixed vault file has already been committed
+- Android autofill matches an exact package, an exact host, or a registrable domain with a small multi-label suffix list. A title or a shared public suffix (`paypal.evil.com`, `foo.github.io` vs `bar.github.io`) no longer offers the login. A leftover plaintext cache migrates without loading its passwords
+- Device-secret Keystore/Keychain key is not invalidated by biometric re-enrollment (Android `setInvalidatedByBiometricEnrollment(false)`, iOS `.biometryAny`); the fast-unlock bundle still is
+- LAN sync rejects protocol v1; a client that sends `spakeShare` is bound to v3; reply wire follows the strongest envelope demonstrated
 - Password unlock is native-first: one Argon2id per attempt (Android BouncyCastle; iOS phc-winner-argon2); KDF vs AEAD gates split; Android AEAD must match noble; fail-closed if native KDF is down
 - Device-migration `pairingSecret` is stored in SecureStore (device-bound), not AsyncStorage; leftover secrets in pending-migration meta are migrated on read
 - Mobile `1M` auto-logout uses wall-clock elapsed time on resume (JS timers freeze while backgrounded); `INSTANT` records `inactive` and re-checks on resume so a missed `background` event still locks
@@ -24,6 +43,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 - Decrypted vault JSON is structurally parsed (`parseEncryptedDatabaseJson`) instead of `JSON.parse as T`; LAN migration `/info`, `/auth`, `/status` use the same pattern; settings/auth/UI/card analysis no longer use `any` for locale, theme, prompts, or settings values
 
 ### Changed
+- Opening a key pushes a native editor inside the Cards tab. List rows stay collapsed; the form is split into disclosure sections so a tall card scrolls on its own screen
+- Native alerts lead with the outcome (backup created, browser opened the vault, screenshot taken) and put the `.pkey` name or client in the body
+- Dashboard tab selection lives in its own context (`useDashboardTabName` / `useSetDashboardTab`); inactive tabs freeze React renders
 - Cards list, Stats/Security/Settings scroll padding, FAB, and bottom toasts reserve space from the native tab-bar inset helpers instead of magic `150` / `120` / `+72` constants.
 - Split in-app notifications by layer: `NotificationProvider` in `src/context/`, overlay UI in `src/components/notifications/`, queue/OS helpers remain in `src/notifications/`
 - Auth vault upgrade, screenshot policy, and debounced vault writes extracted from god-contexts; migration QR scanner split from `MigrationFlowScreen`

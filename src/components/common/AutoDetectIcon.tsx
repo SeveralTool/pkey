@@ -8,7 +8,11 @@ import { TouchableOpacity, View, Animated, Easing } from 'react-native';
 import { Image } from 'expo-image';
 import { Ionicons } from '@expo/vector-icons';
 import { CardIcon } from '../../types';
-import { DEFAULT_CARD_ICON, resolveCardIcon, resolveIoniconName } from '../../services/iconDetection';
+import {
+  DEFAULT_CARD_ICON,
+  resolveCardIcon,
+  resolveIoniconName,
+} from '../../services/iconDetection';
 
 interface AutoDetectIconProps {
   icon: CardIcon;
@@ -54,13 +58,17 @@ const LoaderSpinner: React.FC<{ color: string; size: number }> = ({ color, size 
   );
 };
 
+/** Glyph name of the default icon; `DEFAULT_CARD_ICON` is typed as the `CardIcon` union. */
+const DEFAULT_GLYPH: string =
+  DEFAULT_CARD_ICON.type === 'icon' ? DEFAULT_CARD_ICON.value : 'key-outline';
+
 function glyphName(icon: CardIcon): keyof typeof Ionicons.glyphMap {
-  const raw = icon.type === 'icon' ? resolveIoniconName(icon.value) : DEFAULT_CARD_ICON.value;
-  const name = raw || DEFAULT_CARD_ICON.value;
+  const raw = icon.type === 'icon' ? resolveIoniconName(icon.value) : DEFAULT_GLYPH;
+  const name = raw || DEFAULT_GLYPH;
   if (name in Ionicons.glyphMap) {
     return name as keyof typeof Ionicons.glyphMap;
   }
-  return DEFAULT_CARD_ICON.value as keyof typeof Ionicons.glyphMap;
+  return DEFAULT_GLYPH as keyof typeof Ionicons.glyphMap;
 }
 
 export const AutoDetectIcon: React.FC<AutoDetectIconProps> = ({
@@ -86,27 +94,25 @@ export const AutoDetectIcon: React.FC<AutoDetectIconProps> = ({
 
   const showImage = Boolean(imageUri) && !imageFailed;
   const fallback: CardIcon = imageFailed
-    ? resolveCardIcon({ type: 'icon', value: DEFAULT_CARD_ICON.value }, link)
+    ? resolveCardIcon({ type: 'icon', value: DEFAULT_GLYPH }, link)
     : resolved;
 
-  const glyph = (
-    showImage ? (
-      <Image
-        key={imageUri}
-        recyclingKey={imageUri}
-        source={{ uri: imageUri }}
-        cachePolicy="memory-disk"
-        contentFit="contain"
-        onError={() => setImageFailed(true)}
-        style={{
-          width: size,
-          height: size,
-          borderRadius: size / 4,
-        }}
-      />
-    ) : (
-      <Ionicons name={glyphName(fallback)} size={size} color={color} />
-    )
+  const glyph = showImage ? (
+    <Image
+      key={imageUri}
+      recyclingKey={imageUri}
+      source={{ uri: imageUri }}
+      cachePolicy="memory-disk"
+      contentFit="contain"
+      onError={() => setImageFailed(true)}
+      style={{
+        width: size,
+        height: size,
+        borderRadius: size / 4,
+      }}
+    />
+  ) : (
+    <Ionicons name={glyphName(fallback)} size={size} color={color} />
   );
 
   if (onPress) {

@@ -103,8 +103,23 @@ export const ACTION_CONFIRM_RESULT_TYPE = 'action_confirm_result' as const;
 /** Satellite → master: user cancelled the waiting UI or chose password fallback. */
 export const ACTION_CONFIRM_CANCEL_TYPE = 'action_confirm_cancel' as const;
 
-/** How long both sides wait for a phone decision before falling back. */
-export const ACTION_CONFIRM_TIMEOUT_MS = 30_000;
+/**
+ * How long the phone keeps a PWA prompt while the app is backgrounded or the
+ * vault is locked. Opening the app from the notification must still be in time.
+ */
+export const PWA_PHONE_PROMPT_ABSOLUTE_MS = 120_000;
+/**
+ * How long the user has to finish biometrics or the master password once the
+ * app is in front and the vault is unlocked. Does not include time spent
+ * locked or in the background.
+ */
+export const PWA_PHONE_PROMPT_RESPOND_MS = 90_000;
+/**
+ * How long the PWA waits for the phone. Covers the background budget plus the
+ * foreground respond window so the browser does not cancel while the user is
+ * still unlocking PKEY.
+ */
+export const ACTION_CONFIRM_TIMEOUT_MS = PWA_PHONE_PROMPT_ABSOLUTE_MS + PWA_PHONE_PROMPT_RESPOND_MS;
 /** Max confirm requests per source inside {@link ACTION_CONFIRM_RATE_WINDOW_MS}. */
 export const ACTION_CONFIRM_RATE_MAX = 10;
 /** Sliding window for {@link ACTION_CONFIRM_RATE_MAX}. */
@@ -130,8 +145,12 @@ export interface ActionConfirmResult {
 export const CONTROL_WIRE_INNER_VERSION = 1;
 /** Clock skew allowed when checking a control-frame `exp` (unix ms). */
 export const CONTROL_WIRE_SKEW_MS = 5_000;
-/** Freshness window for a control frame (`exp = now + TTL` at encrypt time). */
-export const CONTROL_WIRE_TTL_MS = ACTION_CONFIRM_TIMEOUT_MS;
+/**
+ * Freshness window for a control frame (`exp = now + TTL` at encrypt time).
+ * Kept short on purpose: the human prompt wait is longer and starts after the
+ * frame has already been opened.
+ */
+export const CONTROL_WIRE_TTL_MS = 30_000;
 
 /**
  * Post-auth WS types that MUST carry an AES-CBC+HMAC envelope. Pre-auth
@@ -162,8 +181,8 @@ export const UNLOCK_GRANT_TYPE = 'unlock_grant' as const;
 /** Either side: abort a pending unlock. */
 export const UNLOCK_CANCEL_TYPE = 'unlock_cancel' as const;
 
-/** How long both sides wait for a phone unlock decision. */
-export const UNLOCK_TIMEOUT_MS = 30_000;
+/** How long both sides wait for a phone unlock decision. Same budget as action confirm. */
+export const UNLOCK_TIMEOUT_MS = ACTION_CONFIRM_TIMEOUT_MS;
 /** Max unlock requests per source inside {@link UNLOCK_RATE_WINDOW_MS}. */
 export const UNLOCK_RATE_MAX = 3;
 /** Sliding window for {@link UNLOCK_RATE_MAX}. */
@@ -196,8 +215,18 @@ export interface ProtocolError {
 
 /** Current sync protocol version (alias of {@link SYNC_PROTOCOL_VERSION}). */
 export const CURRENT_PROTOCOL = SYNC_PROTOCOL_VERSION;
-/** Oldest protocol version this build still accepts. */
-export const MIN_SUPPORTED_PROTOCOL = 1;
+/**
+ * Oldest protocol version this build still accepts.
+ *
+ * v1 (plaintext top-level token, no wire envelope) is retired. v2 (HMAC login,
+ * AES-CBC + HMAC envelopes) stays accepted as grace for satellites that have
+ * not reloaded the embedded PWA; there is no automatic cutoff date in code —
+ * raising this to 3 is the sunset switch. A peer that presents a SPAKE2 share
+ * is treated as v3 regardless of the version field it claims.
+ */
+export const MIN_SUPPORTED_PROTOCOL = 2;
+/** First protocol version whose login is SPAKE2 and whose wire is XChaCha20-Poly1305. */
+export const SPAKE2_PROTOCOL = 3;
 
 /**
  * Returns whether a peer protocol version is within the supported range.

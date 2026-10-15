@@ -4,14 +4,14 @@
  * Threat model: mitigates passive LAN sniffing and replay of migration frames.
  * Does not replace TLS; pairingSecret must be exchanged out-of-band (QR / manual UI).
  *
- * Pairing codes (post-audit M8):
- *  - **New devices** generate 15 bytes (120 bits) as 24 Crockford Base32
- *    chars, shown as `XXXX-XXXX-XXXX-XXXX-XXXX-XXXX`. 120 bits gives
- *    ~2^60 median-attempt cost against a captured migration frame, which
- *    is beyond feasibility on any hardware for the next several decades.
- *  - **Legacy compatibility**: `normalizePairingCode` and downstream
- *    accept the historic 10-byte (80-bit / 16-char) code so that a phone
- *    still running an older PKey build can pair with a new-build receiver.
+ * Pairing codes:
+ *  - Devices generate 15 bytes (120 bits) as 24 Crockford Base32 chars, shown
+ *    as `XXXX-XXXX-XXXX-XXXX-XXXX-XXXX`. 120 bits gives ~2^60 median-attempt
+ *    cost against a captured migration frame.
+ *  - The historic 10-byte (80-bit / 16-char) code is **retired**:
+ *    `normalizePairingCode` only accepts {@link ACCEPTED_PAIRING_SECRET_BYTES}
+ *    (15 bytes). A phone on an older build cannot pair with this build; both
+ *    phones must be updated first.
  */
 import { AES, CBC, CipherParams, Hex, HmacSHA256, Pkcs7, SHA256, Utf8, WordArray } from 'crypto-es';
 import * as Crypto from 'expo-crypto';
@@ -24,12 +24,15 @@ export const MIGRATION_HKDF_INFO = 'pkey-migration-v2';
 export const PAIRING_SECRET_BYTES = 15;
 export const PAIRING_CODE_LENGTH = 24;
 
-/** Historic size accepted for backwards-compat reads. */
+/**
+ * Retired size (80 bits / 16 chars). Documented for the format history only;
+ * it is **not** in {@link ACCEPTED_PAIRING_SECRET_BYTES} and is rejected on input.
+ */
 export const LEGACY_PAIRING_SECRET_BYTES = 10;
 export const LEGACY_PAIRING_CODE_LENGTH = 16;
 
 /** All secret byte lengths this build will accept as valid pairing codes. */
-const ACCEPTED_PAIRING_SECRET_BYTES: readonly number[] = [PAIRING_SECRET_BYTES];
+export const ACCEPTED_PAIRING_SECRET_BYTES: readonly number[] = [PAIRING_SECRET_BYTES];
 
 /** Crockford Base32 — no I/L/O/U to avoid confusion when typing. */
 const CROCKFORD = '0123456789ABCDEFGHJKMNPQRSTVWXYZ';
@@ -94,9 +97,8 @@ export const decodeCrockfordBase32 = (input: string): Uint8Array | null => {
 
 /**
  * Normalizes user input to the canonical Crockford code, or null if invalid.
- * Accepts both the new 24-char (120-bit) and the legacy 16-char (80-bit)
- * formats so a receiver running this build can still pair with a sender
- * running an older PKey.
+ * Only the 24-char (120-bit) format is accepted; the retired 16-char (80-bit)
+ * code returns `null` (see `migrationChannelCrypto.test.ts`).
  */
 export const normalizePairingCode = (input: string): string | null => {
   const bytes = decodeCrockfordBase32(input);
@@ -105,9 +107,9 @@ export const normalizePairingCode = (input: string): string | null => {
 };
 
 /**
- * Formats a canonical pairing code for display, grouping in blocks of 4 chars.
- * Works for both the new 24-char (`XXXX-XXXX-XXXX-XXXX-XXXX-XXXX`) and the
- * legacy 16-char (`XXXX-XXXX-XXXX-XXXX`) code lengths.
+ * Formats a canonical pairing code for display, grouping in blocks of 4 chars
+ * (`XXXX-XXXX-XXXX-XXXX-XXXX-XXXX`). Input that does not normalize is grouped
+ * as-is so the user can still see what they typed.
  */
 export const formatPairingCode = (code: string): string => {
   const cleaned =

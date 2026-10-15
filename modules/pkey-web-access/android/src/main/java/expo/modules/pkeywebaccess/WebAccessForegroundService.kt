@@ -12,9 +12,13 @@ import android.os.IBinder
 import androidx.core.app.NotificationCompat
 
 /**
- * Sticky FG service so :7392 can survive backgrounding.
- * Android requires an ongoing notification while the service runs — kept
- * minimal/silent. Product alerts (new browser synced) are sent from JS.
+ * Foreground service so :7392 can survive backgrounding while PKEY's task
+ * is still alive (Home, screen off). Android requires an ongoing notification
+ * while the service runs — kept minimal/silent. Product alerts (new browser
+ * synced) are sent from JS.
+ *
+ * Swiping PKEY away stops the service. The JS runtime goes with the activity,
+ * so the process must not be restarted just to repost this notification.
  */
 class WebAccessForegroundService : Service() {
   companion object {
@@ -30,7 +34,12 @@ class WebAccessForegroundService : Service() {
     intent?.getStringExtra("title")?.let { titleText = it }
     intent?.getStringExtra("body")?.let { bodyText = it }
     startInForeground()
-    return START_STICKY
+    return START_NOT_STICKY
+  }
+
+  override fun onTaskRemoved(rootIntent: Intent?) {
+    stopSelf()
+    super.onTaskRemoved(rootIntent)
   }
 
   override fun onDestroy() {

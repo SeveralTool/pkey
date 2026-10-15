@@ -27,6 +27,14 @@ public class PkeyWebAccessModule: Module {
       self.endBackgroundTask()
     }
 
+    // Android holds a foreground service for the 1-minute backup timer.
+    // iOS cannot keep that timer running after PKEY leaves the screen.
+    AsyncFunction("startBackupKeepAlive") { (_title: String, _body: String) in
+    }
+
+    AsyncFunction("stopBackupKeepAlive") {
+    }
+
     AsyncFunction("updateNotification") { (_body: String) in
       // No sticky/status notifications on iOS.
     }

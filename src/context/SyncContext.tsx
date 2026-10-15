@@ -1,7 +1,15 @@
 /**
  * @fileoverview Application-level web sync lifecycle (PWA access on port 7392).
  */
-import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { AppState, Platform } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import {
@@ -10,14 +18,9 @@ import {
   webClientOsNotifyLabel,
   VAULT_FORK_DECISION_TYPE,
   ACTION_CONFIRM_RESULT_TYPE,
-  ACTION_CONFIRM_TIMEOUT_MS,
-  SERVER_PUSH_TYPE,
   UNLOCK_CANCEL_TYPE,
-  UNLOCK_TIMEOUT_MS,
   encryptControlWire,
   wrapControlInner,
-  computeDbVersionHash,
-  computeSettingsHash,
   vaultContentChanged,
   type VaultForkAction,
   type PwaActionConfirmKind,
@@ -25,8 +28,10 @@ import {
 } from '@pkey/core';
 import { useCoreState } from './CoreStateContext';
 import { useAuth } from './AuthContext';
-import { useUI } from './UIContext';
-import { writeDatabaseToDisk } from '../services/storage';
+import { useDashboardTabName } from './UIContext';
+import { commitSyncedVault, vaultServerPush } from '../services/syncVaultWrite';
+import { attachVaultSecrets } from '../services/vaultSecrets';
+import { vaultForSync } from '../services/vaultPersistence';
 import {
   EMPTY_LAN_NETWORK,
   fetchLanNetwork,
@@ -58,7 +63,6 @@ import {
   getWebKeepAliveMode,
   setWebForegroundLabels,
 } from '../services/webForegroundService';
-import { normalizeAppSettings } from '../utils/appSettings';
 import { getOrCreateDeviceId } from '../services/deviceId';
 import { getOrCreateHostProofSecret } from '../services/hostProofSecret';
 import { WebDiscovery, isWebDiscoveryAvailable } from '../services/webDiscovery';
@@ -91,9 +95,15 @@ import {
   type WebLanAnchor,
 } from '../services/webLanAnchor';
 import { setWebAccessLockStopHandler, setAndroidWebAccessKeepAlive } from '../utils/webAccessLock';
-import { requestBackgroundLockIfNeeded } from '../utils/autoLogoutGuard';
+import {
+  consumeSilentPwaHoldRelease,
+  requestBackgroundLockIfNeeded,
+  setPwaResponseHold,
+  silencePwaHoldRelease,
+} from '../utils/autoLogoutGuard';
 import { waitForPostBiometricUi } from '../utils/waitForPostBiometricUi';
 import { resolvePwaOsIntentAction } from '../notifications/pwaOsIntentAction';
+import { usePwaPromptDeadline } from '../notifications/pwaPromptClock';
 
 const SK_WEB_ENABLED = '@pkey/sync_web_enabled';
 const SK_BLOCKED = '@pkey/sync_blocked';
@@ -134,7 +144,7 @@ function parseBlockedPersist(raw: string | null): BlockedPersist {
       return { sources, ips, sourceIps: {} };
     }
     if (parsed && typeof parsed === 'object') {
-      const ips = Array.isArray(parsed.ips)
+      const ips: string[] = Array.isArray(parsed.ips)
         ? parsed.ips
             .map((ip: unknown) => formatClientIp(typeof ip === 'string' ? ip : null))
             .filter((ip: string | null): ip is string => !!ip)
@@ -202,7 +212,11 @@ export type SyncContextData = Readonly<{
   } | null;
   resolveActionConfirm: (ok: boolean, reason?: ActionConfirmDenyReason) => void;
   beginActionConfirmAuth: () => void;
-  handleActionConfirmOsIntent: (kind: 'open' | 'deny', requestId: string | null) => void;
+  handleActionConfirmOsIntent: (
+    kind: 'open' | 'deny',
+    requestId: string | null,
+    options?: { afterVaultUnlock?: boolean }
+  ) => void;
   /** Browser asked this phone to unlock the PWA; null when idle. */
   unlockPrompt: { sourceId: string; requestId: string; sas: string } | null;
   resolveUnlock: (ok: boolean) => void;
@@ -242,13 +256,31 @@ function pwaActionVerbFromLocale(
   }
 }
 
+/** Refreshes LAN web-access UI when the user opens Security, without re-rendering SyncProvider. */
+function RefreshWebUiOnSecurityTab({
+  enabled,
+  syncUiFromServer,
+}: {
+  enabled: boolean;
+  syncUiFromServer: () => Promise<boolean>;
+}): null {
+  const currentTab = useDashboardTabName();
+
+  useEffect(() => {
+    if (currentTab === 'security' && enabled) {
+      void syncUiFromServer();
+    }
+  }, [currentTab, enabled, syncUiFromServer]);
+
+  return null;
+}
+
 /** Consumes web-access server lifecycle and connected-client state. */
 export const useSync = () => useContext(SyncContext);
 
 /** Manages the local PWA sync server, mDNS discovery, and client blocklist. */
 export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const { db, setDb, dbRef, masterPassword } = useCoreState();
-  const { currentTab } = useUI();
+  const { db, setDb, dbRef, isLogged, setCustomPrompt } = useCoreState();
   const { performBiometricOrPasswordCheck } = useAuth();
 
   const [webServerEnabled, setWebServerEnabled] = useState(false);
@@ -302,8 +334,6 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
   /** Bumped on every stop so an in-flight start cannot revive the server after lock. */
   const webGenerationRef = useRef(0);
   const connectedWebClientsRef = useRef<WebSyncClient[]>([]);
-  const masterPasswordRef = useRef(masterPassword);
-  masterPasswordRef.current = masterPassword;
   const vaultForkHandlerRef = useRef<
     (info: { sourceId: string; pwaCardCount: number; encryptedOnly: boolean }) => void
   >(() => {});
@@ -326,6 +356,7 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const actionConfirmPromptRef = useRef(actionConfirmPrompt);
   actionConfirmPromptRef.current = actionConfirmPrompt;
   actionConfirmHandlerRef.current = (info) => {
+    setPwaResponseHold(true);
     setActionConfirmPrompt(info);
     if (AppState.currentState === 'active') return;
     const t = getLocale(dbRef.current.settings?.language);
@@ -363,6 +394,7 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
   unlockPromptRef.current = unlockPrompt;
   const unlockAuthInFlightRef = useRef(false);
   unlockHandlerRef.current = (info) => {
+    setPwaResponseHold(true);
     setUnlockPrompt(info);
     if (AppState.currentState === 'active') return;
     const t = getLocale(dbRef.current.settings?.language);
@@ -436,28 +468,12 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
   const buildCore = useCallback((): SyncServerCore => {
     return new SyncServerCore({
-      getDb: () => dbRef.current,
+      getDb: () => vaultForSync() ?? attachVaultSecrets(dbRef.current),
       setDb: async (newDb, sourceId) => {
-        const prev = dbRef.current;
-        const normalized = {
-          ...newDb,
-          settings: normalizeAppSettings(newDb.settings, newDb.cards || []),
-        };
-        setDb(normalized);
-        if (vaultContentChanged(prev, normalized)) {
-          webServerRef.current?.pushToAll(
-            {
-              type: SERVER_PUSH_TYPE,
-              versionHash: computeDbVersionHash(normalized),
-              settingsHash: computeSettingsHash(normalized.settings),
-            },
-            sourceId
-          );
-        }
-        try {
-          await writeDatabaseToDisk(normalized, masterPasswordRef.current);
-        } catch {
-          /* best-effort */
+        const prev = vaultForSync() ?? attachVaultSecrets(dbRef.current);
+        const disk = await commitSyncedVault(newDb, setDb);
+        if (vaultContentChanged(prev, disk)) {
+          webServerRef.current?.pushToAll(vaultServerPush(disk), sourceId);
         }
       },
       onFieldOverwrites: (overwrites, _sourceId, snapshot) => {
@@ -497,25 +513,24 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
                 }
                 const live = dbRef.current;
                 if (!live) return;
-                const nextCards = applySyncUndoToCards(live.cards || [], restored.cardsById);
+                const withSecrets = attachVaultSecrets(live);
+                const nextCards = applySyncUndoToCards(withSecrets.cards || [], restored.cardsById);
                 const nextDb = {
-                  ...live,
+                  ...withSecrets,
                   cards: nextCards,
                   last_update: new Date().toISOString(),
                 };
-                setDb(nextDb);
-                webServerRef.current?.pushToAll({
-                  type: SERVER_PUSH_TYPE,
-                  versionHash: computeDbVersionHash(nextDb),
-                  settingsHash: computeSettingsHash(nextDb.settings),
-                });
-                void writeDatabaseToDisk(nextDb, masterPasswordRef.current).catch(() => {
-                  /* best-effort */
-                });
-                safeToast({
-                  title: lang === 'ESP' ? 'Cambios revertidos' : 'Changes reverted',
-                  variant: 'success',
-                });
+                void commitSyncedVault(nextDb, setDb)
+                  .then((disk) => {
+                    webServerRef.current?.pushToAll(vaultServerPush(disk));
+                    safeToast({
+                      title: lang === 'ESP' ? 'Cambios revertidos' : 'Changes reverted',
+                      variant: 'success',
+                    });
+                  })
+                  .catch(() => {
+                    /* best-effort */
+                  });
               },
             },
             {
@@ -649,13 +664,8 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     webServerRef.current = running;
     running.setOnClientsChanged(setConnectedWebClients);
-    registerWebSyncNotifier(() => {
-      const snap = dbRef.current;
-      webServerRef.current?.pushToAll({
-        type: SERVER_PUSH_TYPE,
-        versionHash: computeDbVersionHash(snap),
-        settingsHash: computeSettingsHash(snap.settings),
-      });
+    registerWebSyncNotifier((snap) => {
+      webServerRef.current?.pushToAll(vaultServerPush(snap));
     });
     const snapshot = running.getClientSnapshot();
     setConnectedWebClients((prev) => (webClientsUiEqual(prev, snapshot) ? prev : snapshot));
@@ -704,6 +714,7 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setVaultForkPrompt(null);
       setActionConfirmPrompt(null);
       setUnlockPrompt(null);
+      silencePwaHoldRelease();
       clearNotifiedWebClients();
       lanAnchorRef.current = null;
       lastLanNotifyAtRef.current = 0;
@@ -813,13 +824,8 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
     webServerRef.current = webServer;
 
-    registerWebSyncNotifier(() => {
-      const snap = dbRef.current;
-      webServerRef.current?.pushToAll({
-        type: SERVER_PUSH_TYPE,
-        versionHash: computeDbVersionHash(snap),
-        settingsHash: computeSettingsHash(snap.settings),
-      });
+    registerWebSyncNotifier((snap) => {
+      webServerRef.current?.pushToAll(vaultServerPush(snap));
     });
 
     try {
@@ -1225,12 +1231,6 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
     return () => sub.remove();
   }, [webServerEnabled, syncUiFromServer, startWebServerCore]);
 
-  useEffect(() => {
-    if (currentTab === 'security' && webServerEnabled) {
-      syncUiFromServer();
-    }
-  }, [currentTab, webServerEnabled, syncUiFromServer]);
-
   const sendControlToSource = useCallback(
     (sourceId: string, type: string, fields: Record<string, unknown>): boolean => {
       const token = webServerRef.current?.getTokenForSource(sourceId);
@@ -1272,10 +1272,20 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [vaultForkPrompt, db.settings?.language, sendControlToSource]
   );
 
+  const dismissStepUpPrompt = useCallback(() => {
+    setCustomPrompt((prev) => {
+      if (!prev.visible) return prev;
+      const dismiss = prev.onDismiss;
+      queueMicrotask(() => dismiss?.());
+      return { ...prev, visible: false, error: undefined, onDismiss: undefined };
+    });
+  }, [setCustomPrompt]);
+
   const resolveActionConfirm = useCallback(
     (ok: boolean, reason?: ActionConfirmDenyReason) => {
       const prompt = actionConfirmPromptRef.current;
       if (!prompt) return;
+      if (!ok) dismissStepUpPrompt();
       const core = coreRef.current;
       const matched =
         core?.completeActionConfirm(prompt.sourceId, prompt.requestId, {
@@ -1300,20 +1310,28 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
     },
-    [db.settings?.language, sendControlToSource]
+    [db.settings?.language, dismissStepUpPrompt, sendControlToSource]
   );
 
+  const actionAuthInFlightRef = useRef(false);
   const beginActionConfirmAuth = useCallback(() => {
     const prompt = actionConfirmPromptRef.current;
-    if (!prompt) return;
+    if (!prompt || actionAuthInFlightRef.current) return;
+    actionAuthInFlightRef.current = true;
     const t = getLocale(db.settings?.language);
-    void performBiometricOrPasswordCheck(() => {
-      resolveActionConfirm(true);
-    }, t.require_auth_pwa_action);
+    void (async () => {
+      try {
+        await performBiometricOrPasswordCheck(() => {
+          resolveActionConfirm(true);
+        }, t.require_auth_pwa_action);
+      } finally {
+        actionAuthInFlightRef.current = false;
+      }
+    })();
   }, [db.settings?.language, performBiometricOrPasswordCheck, resolveActionConfirm]);
 
   const handleActionConfirmOsIntent = useCallback(
-    (kind: 'open' | 'deny', requestId: string | null) => {
+    (kind: 'open' | 'deny', requestId: string | null, options?: { afterVaultUnlock?: boolean }) => {
       const action = resolvePwaOsIntentAction(
         kind,
         actionConfirmPromptRef.current?.requestId ?? null,
@@ -1331,9 +1349,15 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
       }
       if (action === 'deny') {
         resolveActionConfirm(false, 'denied');
+        return;
       }
+      if (options?.afterVaultUnlock) {
+        void waitForPostBiometricUi().then(() => beginActionConfirmAuth());
+        return;
+      }
+      beginActionConfirmAuth();
     },
-    [db.settings?.language, resolveActionConfirm]
+    [beginActionConfirmAuth, db.settings?.language, resolveActionConfirm]
   );
 
   const resolveUnlock = useCallback(
@@ -1344,6 +1368,7 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
       unlockAuthInFlightRef.current = false;
       setUnlockAuthBusy(false);
       setUnlockPrompt(null);
+      if (!ok) dismissStepUpPrompt();
       if (ok) {
         const grant = core?.buildUnlockGrant(prompt.sourceId, prompt.requestId) ?? null;
         if (!grant) return;
@@ -1373,7 +1398,7 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
         });
       }
     },
-    [db.settings?.language]
+    [db.settings?.language, dismissStepUpPrompt]
   );
 
   const beginUnlockAuth = useCallback(() => {
@@ -1424,71 +1449,131 @@ export const SyncProvider: React.FC<{ children: React.ReactNode }> = ({ children
     [beginUnlockAuth, db.settings?.language, resolveUnlock]
   );
 
+  const pwaHeldRef = useRef(false);
   useEffect(() => {
-    if (!actionConfirmPrompt) return;
-    const timer = setTimeout(() => {
-      const live = actionConfirmPromptRef.current;
-      if (!live || live.requestId !== actionConfirmPrompt.requestId) return;
-      resolveActionConfirm(false, 'timeout');
-    }, ACTION_CONFIRM_TIMEOUT_MS);
-    return () => clearTimeout(timer);
-  }, [actionConfirmPrompt, resolveActionConfirm]);
+    const active = unlockPrompt != null || actionConfirmPrompt != null;
+    if (active) {
+      setPwaResponseHold(true);
+      pwaHeldRef.current = true;
+      return;
+    }
+    const wasHeld = pwaHeldRef.current;
+    pwaHeldRef.current = false;
+    if (consumeSilentPwaHoldRelease()) return;
+    setPwaResponseHold(false);
+    if (wasHeld) requestBackgroundLockIfNeeded();
+  }, [actionConfirmPrompt, unlockPrompt]);
 
-  useEffect(() => {
-    if (!unlockPrompt) return;
-    const timer = setTimeout(() => {
+  const expireActionConfirm = useCallback(
+    (requestId: string) => {
+      const live = actionConfirmPromptRef.current;
+      if (!live || live.requestId !== requestId) return;
+      resolveActionConfirm(false, 'timeout');
+    },
+    [resolveActionConfirm]
+  );
+  const expireUnlock = useCallback(
+    (requestId: string) => {
       const live = unlockPromptRef.current;
-      if (!live || live.requestId !== unlockPrompt.requestId) return;
+      if (!live || live.requestId !== requestId) return;
       resolveUnlock(false);
-    }, UNLOCK_TIMEOUT_MS);
-    return () => clearTimeout(timer);
-  }, [unlockPrompt, resolveUnlock]);
+    },
+    [resolveUnlock]
+  );
+  usePwaPromptDeadline(actionConfirmPrompt?.requestId ?? null, isLogged, expireActionConfirm);
+  usePwaPromptDeadline(unlockPrompt?.requestId ?? null, isLogged, expireUnlock);
+
+  const nativeForegroundAvailable = isNativeForegroundServiceAvailable();
+  const webKeepAliveMode = getWebKeepAliveMode();
+  const syncValue = useMemo(
+    () => ({
+      nativeSyncAvailable,
+      webServerEnabled,
+      webServerBusy,
+      webForegroundActive,
+      nativeForegroundAvailable,
+      webKeepAliveMode,
+      enableWebServer,
+      disableWebServer,
+      webQrUrl,
+      webIpUrl,
+      webMdnsUrl,
+      webPort: WEB_SYNC_PORT,
+      localIp,
+      mdnsWebAvailable,
+      connectedWebClients,
+      blockDevice,
+      unblockDevice,
+      blockedSources,
+      blockedIps,
+      unblockIp,
+      blockWebClient,
+      blockClientIdentity,
+      webClientAliases,
+      setWebClientAlias,
+      webReactivatePending,
+      dismissWebReactivate,
+      reactivateWebServer,
+      lanNetwork,
+      revealLanSsid,
+      vaultForkPrompt,
+      resolveVaultFork,
+      actionConfirmPrompt,
+      resolveActionConfirm,
+      beginActionConfirmAuth,
+      handleActionConfirmOsIntent,
+      unlockPrompt,
+      resolveUnlock,
+      beginUnlockAuth,
+      unlockAuthBusy,
+      handleUnlockOsIntent,
+    }),
+    [
+      nativeSyncAvailable,
+      webServerEnabled,
+      webServerBusy,
+      webForegroundActive,
+      nativeForegroundAvailable,
+      webKeepAliveMode,
+      enableWebServer,
+      disableWebServer,
+      webQrUrl,
+      webIpUrl,
+      webMdnsUrl,
+      localIp,
+      mdnsWebAvailable,
+      connectedWebClients,
+      blockDevice,
+      unblockDevice,
+      blockedSources,
+      blockedIps,
+      unblockIp,
+      blockWebClient,
+      blockClientIdentity,
+      webClientAliases,
+      setWebClientAlias,
+      webReactivatePending,
+      dismissWebReactivate,
+      reactivateWebServer,
+      lanNetwork,
+      revealLanSsid,
+      vaultForkPrompt,
+      resolveVaultFork,
+      actionConfirmPrompt,
+      resolveActionConfirm,
+      beginActionConfirmAuth,
+      handleActionConfirmOsIntent,
+      unlockPrompt,
+      resolveUnlock,
+      beginUnlockAuth,
+      unlockAuthBusy,
+      handleUnlockOsIntent,
+    ]
+  );
 
   return (
-    <SyncContext.Provider
-      value={{
-        nativeSyncAvailable,
-        webServerEnabled,
-        webServerBusy,
-        webForegroundActive,
-        nativeForegroundAvailable: isNativeForegroundServiceAvailable(),
-        webKeepAliveMode: getWebKeepAliveMode(),
-        enableWebServer,
-        disableWebServer,
-        webQrUrl,
-        webIpUrl,
-        webMdnsUrl,
-        webPort: WEB_SYNC_PORT,
-        localIp,
-        mdnsWebAvailable,
-        connectedWebClients,
-        blockDevice,
-        unblockDevice,
-        blockedSources,
-        blockedIps,
-        unblockIp,
-        blockWebClient,
-        blockClientIdentity,
-        webClientAliases,
-        setWebClientAlias,
-        webReactivatePending,
-        dismissWebReactivate,
-        reactivateWebServer,
-        lanNetwork,
-        revealLanSsid,
-        vaultForkPrompt,
-        resolveVaultFork,
-        actionConfirmPrompt,
-        resolveActionConfirm,
-        beginActionConfirmAuth,
-        handleActionConfirmOsIntent,
-        unlockPrompt,
-        resolveUnlock,
-        beginUnlockAuth,
-        unlockAuthBusy,
-        handleUnlockOsIntent,
-      }}
-    >
+    <SyncContext.Provider value={syncValue}>
+      <RefreshWebUiOnSecurityTab enabled={webServerEnabled} syncUiFromServer={syncUiFromServer} />
       {children}
     </SyncContext.Provider>
   );

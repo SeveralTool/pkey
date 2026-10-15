@@ -9,7 +9,8 @@ function parseCards(value: unknown): PasswordCard[] | null {
   const cards: PasswordCard[] = [];
   for (const item of value) {
     if (!isRecord(item) || typeof item.id !== 'string') return null;
-    cards.push(item as PasswordCard);
+    // Shallow structural check only (`id`); the remaining card fields are trusted vault content.
+    cards.push(item as unknown as PasswordCard);
   }
   return cards;
 }
@@ -47,7 +48,7 @@ export function parseEncryptedDatabase(input: unknown): EncryptedDatabase | null
     passwordHashScheme,
     salt,
     cards,
-    settings: input.settings as AppSettings,
+    settings: input.settings as unknown as AppSettings,
     creation_date: input.creation_date,
     last_update: input.last_update,
     tombstones,

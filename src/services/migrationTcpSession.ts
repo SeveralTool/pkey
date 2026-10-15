@@ -5,7 +5,7 @@
 
 import { SHA256, Hex, Base64 } from 'crypto-es';
 import { getNativeTcpSocket } from '../utils/nativeTcpSocket';
-import { getTlsClientOptions } from './tlsCredentials';
+import { formatTlsFingerprintHex, getTlsClientOptions } from './tlsCredentials';
 import { MigrationSendError } from './migrationErrors';
 import { tryParseHttpResponse } from './migrationHttpUtils';
 import type { MigrationHttpResponse } from './migrationHttpClient';
@@ -18,6 +18,73 @@ import {
 } from './migrationChannelCrypto';
 
 const REQUEST_TIMEOUT_MS = 30_000;
+
+const SHA256_HEX_RE = /^[0-9a-fA-F]{64}$/;
+const BASE64_RE = /^[A-Za-z0-9+/]+={0,2}$/;
+
+function sha256HexOfBytes(bytes: Uint8Array): string {
+  let hex = '';
+  for (const b of bytes) hex += b.toString(16).padStart(2, '0');
+  return SHA256(Hex.parse(hex)).toString(Hex);
+}
+
+function sha256HexOfBase64Der(base64: string): string | null {
+  const cleaned = base64.replace(/\s+/g, '');
+  if (!cleaned || !BASE64_RE.test(cleaned)) return null;
+  return SHA256(Base64.parse(cleaned)).toString(Hex);
+}
+
+/**
+ * Formats a peer certificate object returned by `TLSSocket.getPeerCertificate()`
+ * as the user-visible fingerprint (`formatTlsFingerprintHex` of SHA-256 over the
+ * DER). Accepted shapes:
+ *
+ *  - `{ fingerprint256: "AA:BB:…" }` — Android (`react-native-tcp-socket`);
+ *  - `{ raw: Buffer | Uint8Array | base64 string }`, a bare `Uint8Array`, a
+ *    JSON-serialised Buffer (`{ type: 'Buffer', data: number[] }`) or a base64 string.
+ *
+ * Anything else — including a `Promise` (the native method is async), `null`,
+ * or the iOS dictionary that only carries `pubkey` / `subject` / `issuer` —
+ * returns `null`. Callers must abort: a missing observation is not a pin.
+ */
+export function peerCertificateFingerprint(peer: unknown): string | null {
+  if (peer == null) return null;
+  if (typeof peer === 'string') {
+    const hex = sha256HexOfBase64Der(peer);
+    return hex ? formatTlsFingerprintHex(hex) : null;
+  }
+  if (peer instanceof Uint8Array) {
+    return peer.length ? formatTlsFingerprintHex(sha256HexOfBytes(peer)) : null;
+  }
+  if (typeof peer !== 'object' || typeof (peer as PromiseLike<unknown>).then === 'function') {
+    return null;
+  }
+  const rec = peer as { fingerprint256?: unknown; raw?: unknown; type?: unknown; data?: unknown };
+  if (typeof rec.fingerprint256 === 'string') {
+    const hex = rec.fingerprint256.replace(/:/g, '').trim();
+    return SHA256_HEX_RE.test(hex) ? formatTlsFingerprintHex(hex) : null;
+  }
+  if (rec.type === 'Buffer' && Array.isArray(rec.data)) {
+    const bytes = Uint8Array.from(
+      rec.data.filter((n): n is number => typeof n === 'number' && n >= 0 && n <= 255)
+    );
+    return bytes.length === rec.data.length && bytes.length > 0
+      ? formatTlsFingerprintHex(sha256HexOfBytes(bytes))
+      : null;
+  }
+  if (rec.raw !== undefined) {
+    const raw = rec.raw;
+    if (typeof raw === 'string') {
+      const hex = sha256HexOfBase64Der(raw);
+      return hex ? formatTlsFingerprintHex(hex) : null;
+    }
+    if (raw instanceof Uint8Array) {
+      return raw.length ? formatTlsFingerprintHex(sha256HexOfBytes(raw)) : null;
+    }
+    if (raw && typeof raw === 'object') return peerCertificateFingerprint(raw);
+  }
+  return null;
+}
 
 export class MigrationTcpSession {
   private client: any = null;
@@ -33,11 +100,10 @@ export class MigrationTcpSession {
   private timer: ReturnType<typeof setTimeout> | null = null;
   /**
    * Fingerprint of the certificate the TLS peer actually presented, in the
-   * same "first 16 hex chars of SHA-256, uppercase" format used by
-   * `fingerprintTlsCertificatePem`. `null` when the native TLS layer did not
-   * expose `getPeerCertificate` (older `react-native-tcp-socket` builds) —
-   * in that case callers fall back to comparing the receiver-declared
-   * fingerprint and warning the user.
+   * same `formatTlsFingerprintHex` format used by `fingerprintTlsCertificatePem`.
+   * `null` when the native TLS layer did not expose the DER or a SHA-256 of it
+   * (iOS `react-native-tcp-socket` returns only pubkey / subject / issuer).
+   * Callers abort the transfer; they do not fall back to the declared value.
    *
    * Audit finding A1: this closes the "self-reported fingerprint" loop by
    * cross-checking the fingerprint reported over the app protocol against
@@ -67,15 +133,11 @@ export class MigrationTcpSession {
         if (settled) return;
         settled = true;
         this.connected = true;
-        // Best-effort: capture the actual peer certificate fingerprint. Some
-        // react-native-tcp-socket builds return null; treat as "unknown" and
-        // let the caller decide how to react.
-        try {
-          this.captureTlsFingerprint();
-        } catch {
-          /* ignore */
-        }
-        resolve();
+        // Best-effort: capture the actual peer certificate fingerprint before
+        // the caller reads `peerFingerprint`. `getPeerCertificate()` is a
+        // Promise on both native modules; a missing / unusable certificate
+        // leaves `null` and lets the caller decide how to react.
+        void this.captureTlsFingerprint().finally(resolve);
       };
       const settleErr = (err: Error) => {
         if (settled) return;
@@ -117,61 +179,18 @@ export class MigrationTcpSession {
   }
 
   /**
-   * Extracts the SHA-256 fingerprint of the certificate the TLS peer served
-   * on the current socket, formatted the same way as
-   * `fingerprintTlsCertificatePem` (first 16 hex chars uppercase). Returns
-   * `null` when the underlying TLS layer does not expose the certificate.
+   * Resolves the SHA-256 fingerprint of the certificate the TLS peer served on
+   * the current socket (see {@link peerCertificateFingerprint}). The native
+   * `getPeerCertificate` is asynchronous; awaiting it here is what keeps the
+   * sender from hashing a `Promise` object and aborting on a false mismatch.
    */
-  private captureTlsFingerprint(): void {
-    if (!this.client) return;
-    const getter =
-      typeof this.client.getPeerCertificate === 'function'
-        ? this.client.getPeerCertificate.bind(this.client)
-        : null;
-    if (!getter) {
-      this.tlsPeerFingerprint = null;
-      return;
-    }
-    let peer: unknown;
+  private async captureTlsFingerprint(): Promise<void> {
+    this.tlsPeerFingerprint = null;
+    const client = this.client;
+    if (!client || typeof client.getPeerCertificate !== 'function') return;
     try {
-      peer = getter({ raw: true }) ?? getter();
-    } catch {
-      this.tlsPeerFingerprint = null;
-      return;
-    }
-    // Different implementations return either a Buffer (`raw: true`), a Node
-    // `PeerCertificate` object with a `raw` field, or a `fingerprint256`
-    // string that we can reformat.
-    const anyPeer = peer as {
-      raw?: Buffer | Uint8Array | string;
-      fingerprint256?: string;
-    };
-    if (anyPeer?.fingerprint256 && typeof anyPeer.fingerprint256 === 'string') {
-      this.tlsPeerFingerprint = anyPeer.fingerprint256.replace(/:/g, '').slice(0, 16).toUpperCase();
-      return;
-    }
-    const raw = anyPeer?.raw ?? peer;
-    if (raw == null) {
-      this.tlsPeerFingerprint = null;
-      return;
-    }
-    try {
-      let derBase64: string;
-      if (typeof raw === 'string') {
-        // Some builds return base64 directly.
-        derBase64 = raw;
-      } else if (typeof (raw as { toString?: (enc: string) => string }).toString === 'function') {
-        derBase64 = (raw as { toString: (enc: string) => string }).toString('base64');
-      } else {
-        this.tlsPeerFingerprint = null;
-        return;
-      }
-      // Convert base64 → WordArray of DER bytes → SHA-256 → first 16 hex.
-      // Matches `fingerprintTlsCertificatePem` exactly so the app-protocol
-      // fingerprint and the socket-observed fingerprint are directly
-      // comparable.
-      const der = Base64.parse(derBase64.replace(/\s+/g, ''));
-      this.tlsPeerFingerprint = SHA256(der).toString(Hex).slice(0, 16).toUpperCase();
+      const peer: unknown = await Promise.resolve(client.getPeerCertificate());
+      this.tlsPeerFingerprint = peerCertificateFingerprint(peer);
     } catch {
       this.tlsPeerFingerprint = null;
     }

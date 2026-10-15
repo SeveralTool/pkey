@@ -110,14 +110,44 @@ export const writeDatabaseToDisk = async (
     }
 
     const fileUri = `${FileSystem.documentDirectory}${DATABASE_FILENAME}`;
-    await FileSystem.writeAsStringAsync(fileUri, encryptedData, {
-      encoding: FileSystem.EncodingType.UTF8,
-    });
+    await writeVaultFileAtomically(fileUri, encryptedData);
   } catch (err) {
     console.error('Failed writing serialized cipher packet:', err);
     throw new Error('Could not commit database write operation natively.');
   }
 };
+
+/** Temporary sibling written first so a crash mid-write never truncates the live vault. */
+export const VAULT_TMP_SUFFIX = '.tmp';
+
+/**
+ * Writes the ciphertext to `<vault>.tmp` and renames it over the live file.
+ * A process death during the write leaves the previous vault intact (the
+ * rename is atomic on the same volume). If the rename is unavailable or fails,
+ * falls back to the direct write so the vault is still persisted.
+ */
+async function writeVaultFileAtomically(fileUri: string, contents: string): Promise<void> {
+  const tmpUri = `${fileUri}${VAULT_TMP_SUFFIX}`;
+  const moveAsync = (FileSystem as { moveAsync?: typeof FileSystem.moveAsync }).moveAsync;
+  if (typeof moveAsync !== 'function') {
+    await FileSystem.writeAsStringAsync(fileUri, contents, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+    return;
+  }
+  try {
+    await FileSystem.writeAsStringAsync(tmpUri, contents, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+    await moveAsync({ from: tmpUri, to: fileUri });
+  } catch (err) {
+    console.warn('[storage] atomic vault write failed; falling back to direct write', err);
+    await FileSystem.deleteAsync(tmpUri, { idempotent: true }).catch(() => undefined);
+    await FileSystem.writeAsStringAsync(fileUri, contents, {
+      encoding: FileSystem.EncodingType.UTF8,
+    });
+  }
+}
 
 /** Deletes the vault file and clears related legacy/biometric storage keys. */
 export const destroyDatabase = async (): Promise<void> => {
@@ -126,6 +156,9 @@ export const destroyDatabase = async (): Promise<void> => {
   if (fileInfo.exists) {
     await FileSystem.deleteAsync(destUri);
   }
+  await FileSystem.deleteAsync(`${destUri}${VAULT_TMP_SUFFIX}`, { idempotent: true }).catch(
+    () => undefined
+  );
   await discardPendingMigration();
   await AsyncStorage.removeItem('@PKEY_BIOMETRIC_ID');
   await migrateLegacyStorageIfNeeded();

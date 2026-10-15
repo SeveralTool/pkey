@@ -1,11 +1,18 @@
 /**
  * @fileoverview Wire types and constants for one-shot device migration (v2).
  *
- * Security (v2): LAN traffic is encrypted with a channel key derived from a
- * pairingSecret (QR/manual) + sessionId. Does not use TLS; hostile WiFi or
- * malware on-device remain out of scope.
+ * Transport: TLS over `react-native-tcp-socket` (receiver `createTLSServer` with a
+ * PKCS#12 keystore, sender `connectTLS` with `rejectUnauthorized: false` because the
+ * certificate is self-signed and the LAN IP is not a SAN). Authenticity is the
+ * socket-observed certificate fingerprint (`fingerprintTlsCertificatePem`, first
+ * 32 hex of SHA-256). A missing observation aborts; it is not a visual fallback.
  *
- * Manual pairing: user enters IP + 16-char Crockford code; sessionId is fetched via /info.
+ * Application channel (v2), layered on top of TLS: frames are encrypted with a
+ * channel key derived from pairingSecret (QR/manual) + sessionId
+ * (`migrationChannelCrypto.ts`). Malware on-device remains out of scope.
+ *
+ * Manual pairing: user enters IP + 24-char Crockford code (120 bits); sessionId is
+ * fetched via /info. The retired 16-char (80-bit) code is rejected.
  */
 import { isRecord } from '../utils/jsonUnknown';
 import { normalizePairingCode } from './migrationChannelCrypto';
@@ -79,6 +86,8 @@ export interface MigrationAuthRequestV2 {
   senderSessionId: string;
   senderIp?: string;
   senderCallbackPort?: number;
+  /** SHA-256 prefix of the sender callback certificate. Required to pin the wipe. */
+  senderTlsFingerprint: string;
 }
 
 export interface MigrationAuthResponse {
@@ -129,7 +138,8 @@ export const buildMigrationQrPayload = (
   sessionId: string,
   pairingSecret: string
 ): string => {
-  const ps = normalizePairingCode(pairingSecret) || pairingSecret;
+  const ps = normalizePairingCode(pairingSecret);
+  if (!ps) return '';
   const params = new URLSearchParams({
     sid: sessionId,
     ps,
@@ -225,10 +235,10 @@ export function parseMigrationAuthResponse(input: unknown): MigrationAuthRespons
   };
 }
 
-/** Structural parse of `/status` JSON (partial fields used by the sender). */
+/** Structural parse of `/status` JSON (partial fields used by the sender; `phase` may be absent). */
 export function parseMigrationStatusResponse(
   input: unknown
-): Pick<MigrationStatusResponse, 'phase' | 'message' | 'readyToFinalize'> | null {
+): Partial<Pick<MigrationStatusResponse, 'phase' | 'message' | 'readyToFinalize'>> | null {
   if (!isRecord(input)) return null;
   const phase =
     typeof input.phase === 'string' ? (input.phase as MigrationStatusResponse['phase']) : undefined;
